@@ -1,0 +1,21 @@
+### IntelliJ IDEA ###
+.idea/
+*.iml
+out/
+
+### Maven ###
+target/
+
+### Gradle ###
+.gradle/
+build/
+
+### Spring Boot temp run folders ###
+SpringBootPublisher-*/
+
+### Logs ###
+*.log
+
+### OS files ###
+.DS_Store
+Thumbs.db
