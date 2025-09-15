@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lịch sử cảm biến</title>
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="styles/common.css" />
+  <link rel="stylesheet" href="styles/history.css" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Flatpickr -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/vn.js"></script>
+
+  <!-- Script -->
+  <script defer src="history.js"></script>
+</head>
+<body>
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div>
+      <div class="brand">
+        <div class="logo">IOT</div>
+        <div class="brand-text"><div class="line1">System.</div></div>
+      </div>
+      <nav class="nav">
+        <a class="nav-item" href="index.html">Trang chủ</a>
+        <a class="nav-item active" href="history.html">Dữ liệu cảm biến</a>
+        <a class="nav-item" href="activity.html">Lịch sử hoạt động</a>
+        <a class="nav-item" href="profile.html">Hồ sơ</a>
+        <a class="nav-item">Đăng xuất</a>
+      </nav>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <header class="topbar">
+      <h1>Lịch sử cảm biến</h1>
+    </header>
+
+    <!-- Filter -->
+    <section class="filters">
+      <div class="filter-group">
+        <label>Từ ngày:</label>
+        <input type="text" id="fromDate" placeholder="dd/mm/yyyy" />
+      </div>
+      <div class="filter-group">
+        <label>Đến ngày:</label>
+        <input type="text" id="toDate" placeholder="dd/mm/yyyy" />
+      </div>
+      <div class="filter-group">
+        <label>Số bản ghi / trang:</label>
+        <select id="pageSize">
+          <option value="10">10</option>
+          <option value="20" selected>20</option>
+          <option value="50">50</option>
+        </select>
+      </div>
+      <button id="btnSearch">Lọc</button>
+    </section>
+
+    <!-- Table -->
+    <section class="table-section">
+      <table class="sensor-table">
+        <thead>
+          <tr>
+            <th>STT</th>
+            <th>Nhiệt độ (°C)</th>
+            <th>Độ ẩm (%)</th>
+            <th>Ánh sáng (Lux)</th>
+            <th>Ngày tháng</th>
+          </tr>
+        </thead>
+        <tbody id="sensorTableBody">
+          <!-- rows -->
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Pagination -->
+    <section class="pagination">
+      <button id="prevPage">« Trước</button>
+      <span id="pageInfo">Trang 1 / 1</span>
+      <button id="nextPage">Sau »</button>
+    </section>
+  </main>
+</div>
+</body>
+</html>

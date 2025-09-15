@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IOT System - Trang chủ</title>
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="styles/common.css" />
+  <link rel="stylesheet" href="styles/index.css" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- SockJS + STOMP -->
+  <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+
+  <!-- Script -->
+  <script defer src="index.js"></script>
+</head>
+<body>
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div>
+      <div class="brand">
+        <div class="logo">IOT</div>
+        <div class="brand-text"><div class="line1">System.</div></div>
+      </div>
+      <nav class="nav">
+        <a class="nav-item active" href="index.html">Trang chủ</a>
+        <a class="nav-item" href="history.html">Dữ liệu cảm biến</a>
+        <a class="nav-item" href="activity.html">Lịch sử hoạt động</a>
+        <a class="nav-item" href="profile.html">Hồ sơ</a>
+        <a class="nav-item">Đăng xuất</a>
+      </nav>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <header class="topbar">
+      <h1>Trang chủ</h1>
+    </header>
+
+    <!-- Device cards -->
+    <section class="cards">
+      <div class="card device">
+        <div class="card-header">
+          <h3>LED 1</h3>
+          <label class="switch">
+            <input type="checkbox" id="led0-toggle" />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="card device">
+        <div class="card-header">
+          <h3>LED 2</h3>
+          <label class="switch">
+            <input type="checkbox" id="led1-toggle" />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="card device">
+        <div class="card-header">
+          <h3>LED 3</h3>
+          <label class="switch">
+            <input type="checkbox" id="led2-toggle" />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <!-- Sensor cards -->
+    <section class="sensor-cards">
+      <div class="card sensor">
+        <div class="sensor-header"><h3>Nhiệt độ</h3></div>
+        <div class="sensor-body">
+          <div class="sensor-value"><strong id="box-temp">--</strong> °C</div>
+          <div class="sensor-time">Cập nhật: <span id="box-temp-time">--:--:--</span></div>
+        </div>
+      </div>
+
+      <div class="card sensor">
+        <div class="sensor-header"><h3>Độ ẩm</h3></div>
+        <div class="sensor-body">
+          <div class="sensor-value"><strong id="box-hum">--</strong> %</div>
+          <div class="sensor-time">Cập nhật: <span id="box-hum-time">--:--:--</span></div>
+        </div>
+      </div>
+
+      <div class="card sensor">
+        <div class="sensor-header"><h3>Ánh sáng</h3></div>
+        <div class="sensor-body">
+          <div class="sensor-value"><strong id="box-light">--</strong> Lux</div>
+          <div class="sensor-time">Cập nhật: <span id="box-light-time">--:--:--</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Charts -->
+    <section class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3>Nhiệt độ (°C)</h3>
+          <select id="temp-window" class="window-select">
+            <option value="5">5 điểm</option>
+            <option value="15" selected>15 điểm</option>
+            <option value="30">30 điểm</option>
+          </select>
+        </div>
+        <canvas id="tempChart"></canvas>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3>Độ ẩm (%)</h3>
+          <select id="hum-window" class="window-select">
+            <option value="5">5 điểm</option>
+            <option value="15" selected>15 điểm</option>
+            <option value="30">30 điểm</option>
+          </select>
+        </div>
+        <canvas id="humChart"></canvas>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3>Ánh sáng (Lux)</h3>
+          <select id="light-window" class="window-select">
+            <option value="5">5 điểm</option>
+            <option value="15" selected>15 điểm</option>
+            <option value="30">30 điểm</option>
+          </select>
+        </div>
+        <canvas id="lightChart"></canvas>
+      </div>
+    </section>
+  </main>
+</div>
+</body>
+</html>
