@@ -41,11 +41,22 @@ public class ActionHistoryService {
         historyRepo.save(history);
     }
 
-    public PagedResponse<ActionHistoryDTO> search(String dateStr, String deviceName, DeviceState action, int page, int size) {
+    public PagedResponse<ActionHistoryDTO> search(String dateStr, String fromDateStr, String toDateStr,
+                                                  String deviceName, DeviceState action,
+                                                  int page, int size, String sort) {
         LocalDateTime start = null;
         LocalDateTime end = null;
 
-        if (dateStr != null && !dateStr.isEmpty()) {
+        if (fromDateStr != null && toDateStr != null && !fromDateStr.isBlank() && !toDateStr.isBlank()) {
+            LocalDate from = parseDate(fromDateStr);
+            LocalDate to = parseDate(toDateStr);
+            if (from == null || to == null) {
+                return new PagedResponse<>("Sai định dạng ngày, hãy nhập ddMMyyyy hoặc dd/MM/yyyy",
+                        List.of(), page, size, 0, 0);
+            }
+            start = from.atStartOfDay();
+            end = to.plusDays(1).atStartOfDay();
+        } else if (dateStr != null && !dateStr.isBlank()) {
             LocalDate date = parseDate(dateStr);
             if (date == null) {
                 return new PagedResponse<>("Sai định dạng ngày, hãy nhập ddMMyyyy hoặc dd/MM/yyyy",
@@ -55,7 +66,11 @@ public class ActionHistoryService {
             end = start.plusDays(1);
         }
 
-        Pageable pageable = PageRequest.of(page, size);
+        Pageable pageable = PageRequest.of(page, size,
+                ("asc".equalsIgnoreCase(sort))
+                        ? org.springframework.data.domain.Sort.by("executedAt").ascending()
+                        : org.springframework.data.domain.Sort.by("executedAt").descending()
+        );
         Page<DeviceActionHistory> historyPage = historyRepo.search(deviceName, action, start, end, pageable);
 
         int startIndex = page * size;

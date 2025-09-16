@@ -13,11 +13,11 @@ import java.util.Optional;
 
 public interface SensorDataRepository extends JpaRepository<SensorData, Long>, JpaSpecificationExecutor<SensorData> {
 
+    // Lưu ý: bỏ ORDER BY cố định. Sort sẽ được truyền qua Pageable
     @Query("""
            SELECT s FROM SensorData s
            WHERE (:start IS NULL OR s.recordedAt >= :start)
              AND (:end IS NULL OR s.recordedAt < :end)
-           ORDER BY s.recordedAt DESC
            """)
     Page<SensorData> search(
             @Param("start") LocalDateTime start,

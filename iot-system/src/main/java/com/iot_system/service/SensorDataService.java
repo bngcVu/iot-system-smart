@@ -8,6 +8,7 @@ import com.iot_system.repository.SensorDataRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -41,7 +42,8 @@ public class SensorDataService {
     /**
      * Tìm kiếm dữ liệu cảm biến theo ngày (ddMMyyyy hoặc dd/MM/yyyy), có phân trang
      */
-    public PagedResponse<SensorReadingDTO> search(String dateStr, int page, int size) {
+    // Tìm kiếm theo 1 ngày; hỗ trợ sắp xếp asc/desc theo recordedAt
+    public PagedResponse<SensorReadingDTO> search(String dateStr, int page, int size, String sort) {
         LocalDateTime start = null;
         LocalDateTime end = null;
 
@@ -56,7 +58,17 @@ public class SensorDataService {
             }
         }
 
-        Page<SensorData> sensorPage = sensorRepo.search(start, end, PageRequest.of(page, size));
+        // Xác định Sort theo tham số sort (asc|desc), mặc định desc (ổn định thêm theo id)
+        Sort order = ("asc".equalsIgnoreCase(sort))
+                ? Sort.by(Sort.Order.asc("recordedAt"), Sort.Order.asc("id"))
+                : Sort.by(Sort.Order.desc("recordedAt"), Sort.Order.desc("id"));
+
+        // Dùng JPQL search(...) + Sort từ Pageable (giữ 1 hướng duy nhất)
+        Page<SensorData> sensorPage = sensorRepo.search(start, end, PageRequest.of(page, size,
+                ("asc".equalsIgnoreCase(sort))
+                        ? Sort.by("recordedAt").ascending()
+                        : Sort.by("recordedAt").descending()
+        ));
 
         return mapToPagedResponse(sensorPage, page, size,
                 (start != null)
@@ -67,7 +79,8 @@ public class SensorDataService {
     /**
      * Tìm kiếm dữ liệu cảm biến theo khoảng ngày (ddMMyyyy hoặc dd/MM/yyyy), có phân trang
      */
-    public PagedResponse<SensorReadingDTO> searchRange(String fromDateStr, String toDateStr, int page, int size) {
+    // Tìm kiếm theo khoảng ngày; hỗ trợ sắp xếp asc/desc theo recordedAt
+    public PagedResponse<SensorReadingDTO> searchRange(String fromDateStr, String toDateStr, int page, int size, String sort) {
         LocalDate fromDate = parseDate(fromDateStr);
         LocalDate toDate = parseDate(toDateStr);
 
@@ -79,7 +92,11 @@ public class SensorDataService {
         LocalDateTime start = fromDate.atStartOfDay();
         LocalDateTime end = toDate.plusDays(1).atStartOfDay(); // lấy đến hết ngày toDate
 
-        Page<SensorData> sensorPage = sensorRepo.search(start, end, PageRequest.of(page, size));
+        Page<SensorData> sensorPage = sensorRepo.search(start, end, PageRequest.of(page, size,
+                ("asc".equalsIgnoreCase(sort))
+                        ? Sort.by("recordedAt").ascending()
+                        : Sort.by("recordedAt").descending()
+        ));
 
         return mapToPagedResponse(sensorPage, page, size,
                 "Tìm thấy " + sensorPage.getContent().size()

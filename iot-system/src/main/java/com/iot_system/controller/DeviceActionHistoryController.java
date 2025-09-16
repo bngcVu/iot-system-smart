@@ -22,22 +22,28 @@ public class DeviceActionHistoryController {
     @GetMapping("/search")
     public PagedResponse<ActionHistoryDTO> search(
             @RequestParam(required = false) String date,
+            @RequestParam(required = false) String fromDate,
+            @RequestParam(required = false) String toDate,
             @RequestParam(required = false) String deviceName,
             @RequestParam(required = false) DeviceState action,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "15") int size
+            @RequestParam(defaultValue = "15") int size,
+            @RequestParam(defaultValue = "desc") String sort
     ) {
-        return actionHistoryService.search(date, deviceName, action, page, size);
+        return actionHistoryService.search(date, fromDate, toDate, deviceName, action, page, size, sort);
     }
 
     @GetMapping
     public PagedResponse<ActionHistoryDTO> getAll(
             @RequestParam(required = false) String date,
+            @RequestParam(required = false) String fromDate,
+            @RequestParam(required = false) String toDate,
             @RequestParam(required = false) String deviceName,
             @RequestParam(required = false) DeviceState action,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "15") int size
+            @RequestParam(defaultValue = "15") int size,
+            @RequestParam(defaultValue = "desc") String sort
     ) {
-        return actionHistoryService.search(date, deviceName, action, page, size);
+        return actionHistoryService.search(date, fromDate, toDate, deviceName, action, page, size, sort);
     }
 }

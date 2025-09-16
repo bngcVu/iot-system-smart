@@ -34,12 +34,14 @@ public class SensorDataController {
             @RequestParam(required = false) String fromDate,
             @RequestParam(required = false) String toDate,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "15") int size
+            @RequestParam(defaultValue = "15") int size,
+            // sort: "asc" | "desc"; mặc định desc (mới nhất trước) để giữ hành vi cũ
+            @RequestParam(defaultValue = "desc") String sort
     ) {
         if (fromDate != null && toDate != null) {
-            return sensorDataService.searchRange(fromDate, toDate, page, size);
+            return sensorDataService.searchRange(fromDate, toDate, page, size, sort);
         }
-        return sensorDataService.search(date, page, size);
+        return sensorDataService.search(date, page, size, sort);
     }
 
     /**
@@ -49,9 +51,10 @@ public class SensorDataController {
     public PagedResponse<SensorReadingDTO> getAll(
             @RequestParam(required = false) String dateStr,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "15") int size
+            @RequestParam(defaultValue = "15") int size,
+            @RequestParam(defaultValue = "desc") String sort
     ) {
-        return sensorDataService.search(dateStr, page, size);
+        return sensorDataService.search(dateStr, page, size, sort);
     }
 
     /**

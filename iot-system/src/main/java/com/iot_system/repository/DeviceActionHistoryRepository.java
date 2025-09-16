@@ -20,7 +20,6 @@ public interface DeviceActionHistoryRepository extends JpaRepository<DeviceActio
              AND (:action IS NULL OR h.action = :action)
              AND (:start IS NULL OR h.executedAt >= :start)
              AND (:end IS NULL OR h.executedAt < :end)
-           ORDER BY h.executedAt DESC
            """)
     Page<DeviceActionHistory> search(
             @Param("deviceName") String deviceName,

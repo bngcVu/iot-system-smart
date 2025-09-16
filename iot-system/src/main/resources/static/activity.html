@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>IOT System - Dữ liệu cảm biến</title>
+  <title>IOT System - Lịch sử hoạt động</title>
 
   <!-- Styles -->
   <link rel="stylesheet" href="styles/common.css"/>
@@ -18,15 +18,12 @@
   <!-- Flatpickr (Datepicker) -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css"/>
 
-  <!-- SockJS + Stomp -->
-  <script src="https://cdn.jsdelivr.net/npm/sockjs-client/dist/sockjs.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/stompjs/lib/stomp.min.js"></script>
-  <!-- Flatpickr JS + Vietnamese locale -->
+  <!-- Script libs -->
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/vn.js"></script>
 
-  <!-- Script -->
-  <script defer src="history.js"></script>
+  <!-- Page Script -->
+  <script defer src="activity.js"></script>
 </head>
 <body>
 <div class="app">
@@ -39,8 +36,8 @@
       </div>
       <nav class="nav">
         <a class="nav-item" href="index.html">Trang chủ</a>
-        <a class="nav-item active" href="history.html">Dữ liệu cảm biến</a>
-        <a class="nav-item" href="activity.html">Lịch sử hoạt động</a>
+        <a class="nav-item" href="history.html">Dữ liệu cảm biến</a>
+        <a class="nav-item active" href="activity.html">Lịch sử hoạt động</a>
         <a class="nav-item" href="profile.html">Hồ sơ</a>
         
       </nav>
@@ -50,32 +47,38 @@
   <!-- Main -->
   <main class="main">
     <header class="topbar">
-      <h1>Dữ liệu cảm biến</h1>
+      <h1>Lịch sử hoạt động</h1>
     </header>
 
     <!-- Bộ lọc -->
     <section class="card filter-card">
       <div class="row">
         <div class="field">
-          <label>Tìm kiếm</label>
-          <input type="text" id="search
-          Date" placeholder=""/>
+          <label>Tìm kiếm</label>
+          <input type="text" id="deviceName" placeholder=""/>
         </div>
         <div class="field">
           <label>Từ ngày</label>
           <div class="input-row">
-            <input type="text" id="fromDate"/>
+            <input type="text" id="fromDate" placeholder=""/>
             <button id="fromDateBtn" class="icon-btn" title="Chọn ngày">📅</button>
           </div>
         </div>
         <div class="field">
           <label>Đến ngày</label>
           <div class="input-row">
-            <input type="text" id="toDate"/>
+            <input type="text" id="toDate" placeholder=""/>
             <button id="toDateBtn" class="icon-btn" title="Chọn ngày">📅</button>
           </div>
         </div>
-
+        <div class="field">
+          <label>Hành động</label>
+          <select id="action">
+            <option value="">Tất cả</option>
+            <option value="ON">ON</option>
+            <option value="OFF">OFF</option>
+          </select>
+        </div>
         <div class="actions">
           <button id="btnApply" class="btn primary">Tìm kiếm</button>
           <button id="btnReset" class="btn">Reset</button>
@@ -86,7 +89,7 @@
     <!-- Bảng dữ liệu -->
     <section class="card">
       <div class="card-header">
-        <h3>Danh sách dữ liệu</h3>
+        <h3>Danh sách lịch sử</h3>
         <div style="display:flex; gap:8px; align-items: end;">
           <div class="field" style="min-width: 160px;">
             <label>Sắp xếp</label>
@@ -107,14 +110,13 @@
       </div>
 
       <div class="table-wrap">
-        <table class="table" id="sensorTable">
+        <table class="table" id="historyTable">
           <thead>
           <tr>
             <th>STT</th>
             <th>Thời gian</th>
-            <th>Nhiệt độ (°C)</th>
-            <th>Độ ẩm (%)</th>
-            <th>Ánh sáng (Lux)</th>
+            <th>Thiết bị</th>
+            <th>Hành động</th>
           </tr>
           </thead>
           <tbody></tbody>
@@ -132,3 +134,5 @@
 </div>
 </body>
 </html>
+
+

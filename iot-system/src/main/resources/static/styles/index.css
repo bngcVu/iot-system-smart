@@ -34,9 +34,10 @@
 
 .charts-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: 1fr !important; /* Luôn xếp dọc từ trên xuống dưới */
   gap: 20px;
   margin: 20px;
+  align-items: stretch;
 }
 
 .chart-card {
@@ -44,7 +45,8 @@
   border-radius: 14px;
   padding: 16px;
   box-shadow: var(--shadow);
-  height: 320px;
+  height: 380px;
+  overflow: hidden;
 }
 
 .chart-header {
@@ -52,6 +54,22 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 12px;
+}
+
+/* Ensure canvas fits card and doesn't overflow grid */
+.chart-canvas { height: 320px; }
+.chart-card canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
+/* Responsive columns (giữ 1 cột ở mọi kích thước) */
+@media (max-width: 1200px) {
+  .charts-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+  .charts-grid { grid-template-columns: 1fr; }
 }
 
 .window-select {

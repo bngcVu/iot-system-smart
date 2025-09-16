@@ -12,20 +12,20 @@
   --green: #51cf66;
 }
 
+/* ===== Global ===== */
 body {
   margin: 0;
   font-family: Inter, system-ui, Segoe UI, Roboto, Arial, sans-serif;
   background: linear-gradient(180deg, #f7fbf9 0%, #f2f6f9 100%);
   color: var(--text);
 }
-
 .app {
   display: grid;
   grid-template-columns: 260px 1fr;
   min-height: 100vh;
 }
 
-/* Sidebar */
+/* ===== Sidebar ===== */
 .sidebar {
   background: var(--sidebar);
   padding: 18px 14px;
@@ -39,13 +39,10 @@ body {
 }
 .brand { display: flex; align-items: center; gap: 10px; margin: 8px 8px 16px; }
 .logo {
-  width: 38px;
-  height: 38px;
+  width: 38px; height: 38px;
   border-radius: 10px;
-  background: var(--primary);
-  color: #fff;
-  display: grid;
-  place-items: center;
+  background: var(--primary); color: #fff;
+  display: grid; place-items: center;
   font-weight: 700;
 }
 .nav { display: flex; flex-direction: column; gap: 6px; }
@@ -59,24 +56,25 @@ body {
 .profile { display: flex; align-items: center; gap: 12px; margin: 16px 8px; }
 .avatar { width: 42px; height: 42px; border-radius: 50%; background: var(--primary); }
 
-/* Topbar */
+/* ===== Topbar ===== */
 .topbar {
   background: linear-gradient(90deg, var(--primary), #2fb599);
   color: #fff;
   padding: 20px 24px;
 }
 
-/* Card chung */
+/* ===== Card ===== */
 .card {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 16px;
   box-shadow: var(--shadow);
+  margin-bottom: 20px;
 }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
 
-/* Switch */
+/* ===== Switch (Device control) ===== */
 .switch { position: relative; display: inline-block; width: 58px; height: 30px; }
 .switch input { opacity: 0; width: 0; height: 0; }
 .slider {
@@ -87,5 +85,12 @@ body {
   content: ""; position: absolute; height: 24px; width: 24px; left: 3px; bottom: 2px;
   background: white; border-radius: 50%; transition: .25s;
 }
-input:checked + .slider { background: var(--primary); }
-input:checked + .slider:before { transform: translateX(28px); }
+input:checked + .slider { background: linear-gradient(90deg, var(--primary), #2fb599); }
+input:checked + .slider:before { transform: translateX(28px); box-shadow: 0 2px 4px rgba(0,0,0,.2); }
+
+/* ===== Responsive ===== */
+@media (max-width: 900px) {
+  .app { grid-template-columns: 70px 1fr; }
+  .nav-item { text-align: center; }
+  .nav-item span { display: none; } /* nếu bạn muốn icon-only */
+}

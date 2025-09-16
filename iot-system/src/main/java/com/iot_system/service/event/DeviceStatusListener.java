@@ -14,6 +14,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -77,7 +78,9 @@ public class DeviceStatusListener {
             Map<String, Object> wsPayload = new HashMap<>();
             wsPayload.put("deviceId", deviceId);
             wsPayload.put("state", state);
-            wsPayload.put("time", history.getExecutedAt().toString());
+            // Thống nhất format thời gian dd-MM-yyyy HH:mm:ss
+            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss");
+            wsPayload.put("recordedAt", history.getExecutedAt().format(fmt));
             wsTemplate.convertAndSend("/topic/devices", wsPayload);
 
         } catch (Exception e) {
@@ -107,7 +110,8 @@ public class DeviceStatusListener {
                 wsPayload.put("temperature", temperature);
                 wsPayload.put("humidity", humidity);
                 wsPayload.put("light", light);
-                wsPayload.put("time", LocalDateTime.now().toString());
+                DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss");
+                wsPayload.put("recordedAt", LocalDateTime.now().format(fmt));
                 wsTemplate.convertAndSend("/topic/sensors", wsPayload);
 
             } else {
