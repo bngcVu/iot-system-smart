@@ -136,10 +136,10 @@ function setLoading(isLoading) {
 
 // -------- API Calls --------
 // Lấy dữ liệu cảm biến mới nhất (mặc định sort=desc ở backend)
-async function fetchAllSensorData() {
+async function fetchAllSensorData(sort = 'desc') {
   try {
     console.log('Fetching all sensor data...');
-    const response = await fetch(`${SENSOR_API}?page=0&size=1000&sort=desc`);
+    const response = await fetch(`${SENSOR_API}?page=0&size=1000&sort=${encodeURIComponent(sort)}`);
     console.log('Response status:', response.status);
     
     if (!response.ok) {
@@ -261,7 +261,7 @@ async function loadData() {
   try {
     setLoading(true);
     console.log('Loading sensor data...');
-    const data = await fetchAllSensorData();
+    const data = await fetchAllSensorData('desc');
     
     // Add STT to each item
     const dataWithStt = data.map((item, index) => ({
@@ -389,6 +389,31 @@ async function loadDataWithDateRange(fromDate, toDate) {
   }
 }
 
+async function loadAllWithSort(sort) {
+  try {
+    setLoading(true);
+    const data = await fetchAllSensorData(sort);
+    const dataWithStt = data.map((item, index) => ({
+      ...item,
+      stt: index + 1
+    }));
+    if (sensorDataTable) {
+      sensorDataTable.clear();
+      sensorDataTable.rows.add(dataWithStt);
+      sensorDataTable.draw();
+    }
+    updateTotalCount(dataWithStt.length);
+    if (dataWithStt.length > 0) {
+      latestTimestamp = getTimestampMillis(dataWithStt[0].recordedAt);
+    }
+  } catch (error) {
+    console.error('Error loading all with sort:', error);
+    showError('Không thể tải dữ liệu. Vui lòng thử lại.');
+  } finally {
+    setLoading(false);
+  }
+}
+
 // Cập nhật tổng số bản ghi hiện có trên UI
 function updateTotalCount(count) {
   const totalCountElement = select('total-count');
@@ -478,7 +503,9 @@ async function handleSearch() {
       showError('Định dạng ngày không hợp lệ. Vui lòng nhập theo định dạng dd/mm/yyyy hoặc ddmmyyyy');
     }
   } else {
-    showError('Vui lòng nhập ngày tìm kiếm hoặc khoảng ngày từ - đến');
+    clearError();
+    const sort = (select('sort-order') && select('sort-order').value) || 'desc';
+    await loadAllWithSort(sort);
   }
 }
 

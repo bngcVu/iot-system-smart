@@ -10,8 +10,13 @@
 .filter-card .row {
   display: grid;
   grid-template-columns: 1.2fr 1fr 1fr 0.8fr auto;
-  gap: 12px 16px;
+  gap: 8px 8px;
   align-items: end;
+}
+
+/* Tăng khoảng cách giữa ô "Tìm kiếm" và nhóm ngày */
+.filter-card .row .field:first-child {
+  margin-right: 24px;
 }
 
 .inline-field {
