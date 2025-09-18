@@ -12,6 +12,8 @@ import com.iot_system.service.SensorDataService;
 import org.springframework.context.event.EventListener;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -26,6 +28,8 @@ public class DeviceStatusListener {
     private final SensorDataService sensorDataService;
     private final SimpMessagingTemplate wsTemplate;
     private final ObjectMapper mapper = new ObjectMapper();
+
+    private static final Logger log = LoggerFactory.getLogger(DeviceStatusListener.class);
 
     private final String actionTopic = "device_actions";
     private final String sensorTopic = "sensor/data";
@@ -51,7 +55,7 @@ public class DeviceStatusListener {
                 handleSensor(json);
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("[WS] Lỗi xử lý sự kiện thiết bị", e);
         }
     }
 
@@ -72,7 +76,7 @@ public class DeviceStatusListener {
             history.setExecutedAt(LocalDateTime.now());
             actionHistoryRepository.save(history);
 
-            System.out.println("💾 Đã lưu DB (action history): deviceId=" + deviceId + " state=" + state);
+            log.info("[SERVICE] Đã lưu lịch sử hành động: deviceId={}, trạng thái={}", deviceId, state);
 
             //Gửi WebSocket tới FE
             Map<String, Object> wsPayload = new HashMap<>();
@@ -84,7 +88,7 @@ public class DeviceStatusListener {
             wsTemplate.convertAndSend("/topic/devices", wsPayload);
 
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("[SERVICE] Lỗi xử lý ACK", e);
         }
     }
 
@@ -102,7 +106,7 @@ public class DeviceStatusListener {
 
                 sensorDataService.saveSensorData(device, temperature, humidity, light);
 
-                System.out.println("Đã lưu database cho deviceUid=" + deviceUid);
+            log.info("[SERVICE] Đã lưu dữ liệu cảm biến cho deviceUid={}", deviceUid);
 
                 //Gửi WebSocket tới FE
                 Map<String, Object> wsPayload = new HashMap<>();
@@ -115,10 +119,10 @@ public class DeviceStatusListener {
                 wsTemplate.convertAndSend("/topic/sensors", wsPayload);
 
             } else {
-                System.err.println("Thiếu deviceUid trong payload!");
+                log.warn("[SERVICE] Thiếu deviceUid trong payload");
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("[WS] Lỗi xử lý dữ liệu cảm biến", e);
         }
     }
 }

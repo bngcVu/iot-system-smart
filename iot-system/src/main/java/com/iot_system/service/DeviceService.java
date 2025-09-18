@@ -8,6 +8,8 @@ import com.iot_system.mqtt.CommandPublisher;
 import com.iot_system.repository.DeviceRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -23,6 +25,8 @@ public class DeviceService {
 
     private final DeviceRepository deviceRepo;
     private final CommandPublisher commandPublisher;
+
+    private static final Logger log = LoggerFactory.getLogger(DeviceService.class);
 
     public DeviceService(DeviceRepository deviceRepo, CommandPublisher commandPublisher) {
         this.deviceRepo = deviceRepo;
@@ -53,7 +57,7 @@ public class DeviceService {
         // ✅ dùng helper method thay vì build JSON thủ công
         commandPublisher.sendAction(device.getId().intValue(), dto.action().toString());
 
-        System.out.println("📤 Sent command -> deviceId=" + device.getId() + ", action=" + dto.action());
+        log.info("[SERVICE] Đã gửi lệnh -> deviceId={}, hành động={}", device.getId(), dto.action());
     }
 
     /**

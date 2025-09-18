@@ -7,9 +7,10 @@ import com.iot_system.domain.entity.SensorData;
 import com.iot_system.repository.SensorDataRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -19,6 +20,8 @@ import java.util.stream.IntStream;
 
 @Service
 public class SensorDataService {
+
+    private static final Logger log = LoggerFactory.getLogger(SensorDataService.class);
 
     private final SensorDataRepository sensorRepo;
 
@@ -57,11 +60,6 @@ public class SensorDataService {
                         List.of(), page, size, 0, 0);
             }
         }
-
-        // Xác định Sort theo tham số sort (asc|desc), mặc định desc (ổn định thêm theo id)
-        Sort order = ("asc".equalsIgnoreCase(sort))
-                ? Sort.by(Sort.Order.asc("recordedAt"), Sort.Order.asc("id"))
-                : Sort.by(Sort.Order.desc("recordedAt"), Sort.Order.desc("id"));
 
         // Dùng JPQL search(...) + Sort từ Pageable (giữ 1 hướng duy nhất)
         Page<SensorData> sensorPage = sensorRepo.search(start, end, PageRequest.of(page, size,
@@ -124,7 +122,7 @@ public class SensorDataService {
     }
 
     /**
-     * Parse string date thành LocalDate (ddMMyyyy hoặc dd/MM/yyyy)
+     * Parse string date thành LocalDate (ddMMyyyy, dd/MM/yyyy hoặc ddMMyy)
      */
     private LocalDate parseDate(String input) {
         try {
@@ -134,16 +132,20 @@ public class SensorDataService {
             if (input.matches("\\d{2}/\\d{2}/\\d{4}")) {
                 return LocalDate.parse(input, DateTimeFormatter.ofPattern("dd/MM/yyyy"));
             }
-        } catch (Exception ignored) {
+            if (input.matches("\\d{6}")) {
+                // Handle ddmmyy format (assume 20xx)
+                String day = input.substring(0, 2); // dd
+                String month = input.substring(2, 4); // mm
+                String year = "20" + input.substring(4, 6); // 20yy
+                String fullInput = day + month + year; // ddmm20yy
+                return LocalDate.parse(fullInput, DateTimeFormatter.ofPattern("ddMMyyyy"));
+            }
+        } catch (Exception e) {
+            log.warn("[SERVICE] Lỗi phân tích ngày: {} - {}", input, e.getMessage());
         }
         return null;
     }
 
 
-    /**
-     * Tìm kiếm nâng cao bằng Specification
-     */
-    public List<SensorData> searchWithSpec(Specification<SensorData> spec) {
-        return sensorRepo.findAll(spec);
-}
+    
 }

@@ -1,243 +1,580 @@
-const API_BASE = "http://localhost:8081";
-const SENSOR_API = `${API_BASE}/api/sensor-data/search`;
+// Trang Dữ liệu cảm biến: khởi tạo DataTable, gọi API, realtime WebSocket, highlight hàng mới
+// -------- Configuration --------
+const API_BASE = 'http://localhost:8081';
+const SENSOR_API = `${API_BASE}/api/sensor-data`;
 
-const state = {
-  page: 0, size: 15, totalPages: 1,
-  fromDate: '', toDate: '',
-  searchDate: '',
-  sort: 'desc',
-  lastData: []
-};
+// -------- Global Variables --------
+// Biến toàn cục cho DataTable và mốc thời gian mới nhất để so sánh realtime
+let sensorDataTable = null;
+let minDate = null;
+let maxDate = null;
+let latestTimestamp = null;
 
-function $(id){ return document.getElementById(id); }
-function pad(n){ return String(n).padStart(2,'0'); }
-function parseDateTime(ts){
-  if(!ts && ts!==0) return null;
-  if(ts instanceof Date) return isNaN(ts)?null:ts;
-  if(typeof ts==='number'){ const d=new Date(ts); return isNaN(d)?null:d; }
-  if(typeof ts==='string'){
-    const iso=new Date(ts);
-    if(!isNaN(iso)) return iso;
-    const m=ts.match(/^(\d{2})-(\d{2})-(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
-    if(m){
-      const[,dd,MM,yyyy,hh,mm,ss]=m;
-      const d=new Date(Number(yyyy),Number(MM)-1,Number(dd),Number(hh),Number(mm),Number(ss));
-      return isNaN(d)?null:d;
+// -------- Utility Functions --------
+// Trợ giúp: lấy phần tử theo id
+function select(id) {
+  return document.getElementById(id);
+}
+
+// Định dạng chuỗi thời gian từ API thành dd-MM-yyyy HH:mm:ss
+function formatDateTime(dateTimeStr) {
+  if (!dateTimeStr) return '--:--:--';
+  
+  try {
+    let date;
+    if (dateTimeStr.includes('T')) {
+      date = new Date(dateTimeStr);
+    } else if (dateTimeStr.includes('-')) {
+      const parts = dateTimeStr.split(' ');
+      if (parts.length === 2) {
+        const datePart = parts[0].split('-');
+        const timePart = parts[1].split(':');
+        date = new Date(
+          parseInt(datePart[2]), // year
+          parseInt(datePart[1]) - 1, // month (0-based)
+          parseInt(datePart[0]), // day
+          parseInt(timePart[0]), // hour
+          parseInt(timePart[1]), // minute
+          parseInt(timePart[2]) // second
+        );
+      }
+    } else {
+      date = new Date(dateTimeStr);
+    }
+    
+    if (!date || isNaN(date)) {
+      console.log('Invalid date:', dateTimeStr);
+      return '--:--:--';
+    }
+    
+    const day = pad2(date.getDate());
+    const month = pad2(date.getMonth() + 1);
+    const year = date.getFullYear();
+    const hours = pad2(date.getHours());
+    const minutes = pad2(date.getMinutes());
+    const seconds = pad2(date.getSeconds());
+    
+    const formatted = `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
+    console.log('Formatted date:', formatted);
+    return formatted;
+  } catch (e) {
+    console.error('Error formatting date:', dateTimeStr, e);
+    return '--:--:--';
+  }
+}
+
+// Định dạng giá trị cảm biến theo đơn vị hiển thị
+function formatValue(value, unit = '') {
+  if (value === null || value === undefined || isNaN(value)) return '--';
+  if (unit === 'Lux') return Math.round(value).toString();
+  return value.toFixed(1);
+}
+
+// Bổ sung số 0 phía trước cho số < 10
+function pad2(num) {
+  return num.toString().padStart(2, '0');
+}
+
+// Chuyển đổi input ngày người dùng (dd/mm/yyyy, ddmmyyyy, ddmmyy) thành ddMMyyyy
+function parseDateInput(dateStr) {
+  if (!dateStr) return null;
+  
+  dateStr = dateStr.trim();
+  
+  if (dateStr.includes('/')) {
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+      const day = parts[0].padStart(2, '0');
+      const month = parts[1].padStart(2, '0');
+      const year = parts[2];
+      return `${day}${month}${year}`;
     }
   }
+  
+  if (dateStr.length === 8 && /^\d{8}$/.test(dateStr)) {
+    return dateStr;
+  }
+  
+  if (dateStr.length === 6 && /^\d{6}$/.test(dateStr)) {
+    const day = dateStr.substring(0, 2);
+    const month = dateStr.substring(2, 4);
+    const year = '20' + dateStr.substring(4, 6);
+    return `${day}${month}${year}`;
+  }
+  
   return null;
 }
-function fmtDateTime(ts){
-  const d=parseDateTime(ts);
-  if(!d) return '--';
-  return `${pad(d.getDate())}-${pad(d.getMonth()+1)}-${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-}
-function toApiDate(yyyyMmDd){
-  if(!yyyyMmDd) return null;
-  const [y,m,d] = yyyyMmDd.split('-');
-  return `${pad(d)}${pad(m)}${y}`;
-}
 
-async function fetchData(){
-  const params = new URLSearchParams();
-  params.set('page', state.page);
-  params.set('size', state.size);
-  params.set('sort', state.sort);
-  // Ưu tiên khoảng ngày nếu người dùng nhập; nếu không thì dùng 1 ngày (searchDate)
-  const norm = normalizeSearchDate(state.searchDate);
-  const hasRange = !!(state.fromDate || state.toDate);
-  if(hasRange){
-    if(state.fromDate) params.set('fromDate', toApiDate(state.fromDate));
-    if(state.toDate) params.set('toDate', toApiDate(state.toDate));
-  } else if(norm){
-    params.set('date', norm);
+// Đảm bảo overlay loading tồn tại trong vùng bảng
+function ensureLoadingOverlay() {
+  const container = document.querySelector('.table-container');
+  if (!container) return null;
+  let overlay = document.getElementById('table-loading');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'table-loading';
+    overlay.className = 'loading-overlay';
+    overlay.innerHTML = '<div class="spinner"></div>';
+    container.appendChild(overlay);
   }
-  const res = await fetch(`${SENSOR_API}?${params.toString()}`);
-  return res.json();
+  return overlay;
 }
 
-// No FE-only filtering; backend controls the result set
-
-function renderRows(items){
-  const tbody=document.querySelector('#sensorTable tbody');
-  tbody.innerHTML='';
-  if(!items.length){
-    const colspan = 1 + getVisibleColumns().length; // +1 for STT
-    tbody.innerHTML=`<tr><td colspan="${colspan}" class="muted">Không có dữ liệu</td></tr>`;
-    return;
+// Bật/tắt trạng thái loading: khóa nút tìm kiếm + overlay bảng
+function setLoading(isLoading) {
+  const btn = select('search-btn');
+  const overlay = ensureLoadingOverlay();
+  if (btn) {
+    btn.disabled = isLoading;
+    btn.classList.toggle('loading', isLoading);
+    btn.textContent = isLoading ? 'Đang tải...' : 'Tìm kiếm';
   }
-  const cols = getVisibleColumns();
-  items.forEach((r, idx)=>{
-    const tr=document.createElement('tr');
-    const stt = state.page * state.size + idx + 1;
-    const cells = [`<td>${stt}</td>`].concat(cols.map(c=>{
-      if(c==='time') return `<td>${fmtDateTime(r.recordedAt)}</td>`;
-      if(c==='temperature') return `<td>${r.temperature??'--'}</td>`;
-      if(c==='humidity') return `<td>${r.humidity??'--'}</td>`;
-      if(c==='light') return `<td>${r.light??'--'}</td>`;
-      return '';
-    })).join('');
-    tr.innerHTML = cells;
-    tbody.appendChild(tr);
-  });
-}
-
-function renderPager(totalPages){
-  $('pageInfo').textContent=`Trang ${state.page+1} / ${totalPages}`;
-  $('prevBtn').disabled=state.page<=0;
-  $('nextBtn').disabled=state.page>=totalPages-1;
-}
-
-function getVisibleColumns(){
-  return ['time','temperature','humidity','light'];
-}
-
-function renderTableHead(){
-  const thead=document.querySelector('#sensorTable thead');
-  const cols = getVisibleColumns();
-  const headerMap = {
-    stt: 'STT',
-    time: 'Thời gian',
-    temperature: 'Nhiệt độ (°C)',
-    humidity: 'Độ ẩm (%)',
-    light: 'Ánh sáng (Lux)'
-  };
-  const ths = ['stt'].concat(cols).map(c=>`<th>${headerMap[c]}</th>`).join('');
-  thead.innerHTML = `<tr>${ths}</tr>`;
-}
-
-// No chart rendering. We only display the table.
-
-function normalizeSearchDate(input){
-  if(!input) return '';
-  const raw = input.trim();
-  // dd/mm/yyyy -> ddMMyyyy
-  const slash = raw.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/);
-  if(slash){
-    const [d,m,y] = raw.split('/');
-    const dd = pad(Number(d));
-    const mm = pad(Number(m));
-    return `${dd}${mm}${y}`;
+  if (overlay) {
+    overlay.style.display = isLoading ? 'flex' : 'none';
   }
-  // ddMMyyyy (7-8 chars with possible leading 0)
-  const compact = raw.match(/^\d{7,8}$/);
-  if(compact){
-    // ensure dd and mm have leading zeros when needed
-    if(raw.length===7){
-      // e.g., 1092025 (1/09/2025) -> 01092025
-      const d = raw.slice(0,1);
-      const m = raw.slice(1,2);
-      const y = raw.slice(2);
-      return `${pad(Number(d))}${pad(Number(m))}${y}`;
+}
+
+// -------- API Calls --------
+// Lấy dữ liệu cảm biến mới nhất (mặc định sort=desc ở backend)
+async function fetchAllSensorData() {
+  try {
+    console.log('Fetching all sensor data...');
+    const response = await fetch(`${SENSOR_API}?page=0&size=1000&sort=desc`);
+    console.log('Response status:', response.status);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
-    if(raw.length===8){
-      return raw;
-    }
+    
+    const data = await response.json();
+    console.log('Sensor data response:', data);
+    return data.data || [];
+  } catch (error) {
+    console.error('Error fetching sensor data:', error);
+    throw error;
   }
-  return '';
 }
 
-async function loadPage(goTo=null){
-  if(goTo!=null) state.page=goTo;
-  const resp=await fetchData();
-  const items=resp.data??[];
-  state.totalPages=resp.totalPages??1;
-  // Reset buffer for realtime when reloading a page with possibly different order
-  state.lastData = items.slice(0, state.size);
-  renderTableHead();
-  renderRows(items);
-  renderPager(state.totalPages);
-}
-
-function connectWS(){
-  const socket=new SockJS(`${API_BASE}/ws`);
-  const client=Stomp.over(socket);
-  client.connect({},()=>{
-    client.subscribe('/topic/sensors',msg=>{
-      // Chỉ cập nhật realtime khi đang xem trang đầu và sắp xếp Mới nhất (desc)
-      if(!(state.sort==='desc' && state.page===0)){
-        return;
+// -------- DataTables Functions --------
+// Khởi tạo DataTable: cấu hình cột, ngôn ngữ, phân trang, nút xuất, ColVis
+    function initializeDataTable() {
+      if (sensorDataTable) {
+        sensorDataTable.destroy();
       }
-      const d=JSON.parse(msg.body);
-      const row={
-        recordedAt:d.time, temperature:d.temperature,
-        humidity:d.humidity, light:d.light
-      };
-      state.lastData.unshift(row);
-      state.lastData=state.lastData.slice(0,state.size);
-      renderRows(state.lastData);
-      const firstRow=document.querySelector('#sensorTable tbody tr');
-      if(firstRow) firstRow.classList.add('new');
-    });
+
+      sensorDataTable = $('#sensor-data-table').DataTable({
+        data: [],
+        columns: [
+          { 
+            title: 'STT',
+            data: 'stt',
+            className: 'stt-cell',
+            width: '60px',
+            orderable: false,
+            visible: true
+          },
+          { 
+            title: 'Nhiệt độ (°C)',
+            data: 'temperature',
+            className: 'temp-cell',
+            orderable: false,
+            visible: true,
+            render: function(data) {
+              return formatValue(data, '°C');
+            }
+          },
+          { 
+            title: 'Độ ẩm (%)',
+            data: 'humidity',
+            className: 'hum-cell',
+            orderable: false,
+            visible: true,
+            render: function(data) {
+              return formatValue(data, '%');
+            }
+          },
+          { 
+            title: 'Ánh sáng (Lux)',
+            data: 'light',
+            className: 'light-cell',
+            orderable: false,
+            visible: true,
+            render: function(data) {
+              return formatValue(data, 'Lux');
+            }
+          },
+          { 
+            title: 'Thời gian',
+            data: 'recordedAt',
+            className: 'time-cell',
+            orderable: false,
+            visible: true,
+            render: function(data) {
+              return formatDateTime(data);
+            }
+          }
+        ],
+        language: {
+          url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/vi.json'
+        },
+        pageLength: 15,
+        lengthMenu: [[10, 15, 25, 50, 100, 200, 500], [10, 15, 25, 50, 100, 200, 500]],
+        dom: '<"dt-header"<"dt-left"B><"dt-right"l>>rt<"dt-footer"ip>',
+        buttons: [
+          {
+            extend: 'colvis',
+            text: 'Chọn cột hiển thị',
+            className: 'btn btn-primary',
+            columns: [1, 2, 3]
+          },
+          {
+            extend: 'excel',
+            text: 'Xuất Excel',
+            className: 'btn btn-success'
+          },
+          {
+            extend: 'pdf',
+            text: 'Xuất PDF',
+            className: 'btn btn-danger'
+          },
+          {
+            extend: 'print',
+            text: 'In',
+            className: 'btn btn-info'
+          }
+        ],
+        responsive: true,
+        processing: true,
+        serverSide: false,
+        searching: false,
+        ordering: false,
+        info: true,
+        paging: true,
+        pagingType: 'full_numbers'
+      });
+
+    }
+
+// -------- Data Loading --------
+// Tải toàn bộ dữ liệu, cập nhật STT và latestTimestamp
+async function loadData() {
+  try {
+    setLoading(true);
+    console.log('Loading sensor data...');
+    const data = await fetchAllSensorData();
+    
+    // Add STT to each item
+    const dataWithStt = data.map((item, index) => ({
+      ...item,
+      stt: index + 1
+    }));
+    
+    console.log('Loaded data with STT:', dataWithStt);
+    
+    if (sensorDataTable) {
+      sensorDataTable.clear();
+      sensorDataTable.rows.add(dataWithStt);
+      sensorDataTable.draw();
+    }
+    
+    updateTotalCount(dataWithStt.length);
+
+    // Update latest timestamp after full load
+    if (dataWithStt.length > 0) {
+      latestTimestamp = getTimestampMillis(dataWithStt[0].recordedAt);
+    }
+  } catch (error) {
+    console.error('Error loading data:', error);
+    showError('Không thể tải dữ liệu. Vui lòng thử lại.');
+  } finally {
+    setLoading(false);
+  }
+}
+
+// Tải dữ liệu theo 1 ngày (search date), kèm tham số sắp xếp asc/desc
+async function loadDataWithSingleDate(date) {
+  try {
+    setLoading(true);
+    console.log('Loading sensor data with single date:', date);
+    
+    const sort = (select('sort-order') && select('sort-order').value) || 'desc';
+    const url = `${SENSOR_API}/search?date=${date}&page=0&size=1000&sort=${encodeURIComponent(sort)}`;
+    console.log('API URL:', url);
+    
+    const response = await fetch(url);
+    console.log('Response status:', response.status);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('Sensor data response:', data);
+    
+    const sensorData = data.data || [];
+    
+    // Add STT to each item
+    const dataWithStt = sensorData.map((item, index) => ({
+      ...item,
+      stt: index + 1
+    }));
+    
+    console.log('Loaded data with STT:', dataWithStt);
+    
+    if (sensorDataTable) {
+      sensorDataTable.clear();
+      sensorDataTable.rows.add(dataWithStt);
+      sensorDataTable.draw();
+    }
+    
+    updateTotalCount(dataWithStt.length);
+
+    if (dataWithStt.length > 0) {
+      latestTimestamp = getTimestampMillis(dataWithStt[0].recordedAt);
+    }
+  } catch (error) {
+    console.error('Error loading data with single date:', error);
+    showError('Không thể tải dữ liệu. Vui lòng thử lại.');
+  } finally {
+    setLoading(false);
+  }
+}
+
+// Tải dữ liệu theo khoảng ngày [fromDate, toDate], kèm tham số sắp xếp
+async function loadDataWithDateRange(fromDate, toDate) {
+  try {
+    setLoading(true);
+    console.log('Loading sensor data with date range:', fromDate, 'to', toDate);
+    
+    const sort = (select('sort-order') && select('sort-order').value) || 'desc';
+    const url = `${SENSOR_API}/search?fromDate=${fromDate}&toDate=${toDate}&page=0&size=1000&sort=${encodeURIComponent(sort)}`;
+    console.log('API URL:', url);
+    
+    const response = await fetch(url);
+    console.log('Response status:', response.status);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('Sensor data response:', data);
+    
+    const sensorData = data.data || [];
+    
+    // Add STT to each item
+    const dataWithStt = sensorData.map((item, index) => ({
+      ...item,
+      stt: index + 1
+    }));
+    
+    console.log('Loaded data with STT:', dataWithStt);
+    
+    if (sensorDataTable) {
+      sensorDataTable.clear();
+      sensorDataTable.rows.add(dataWithStt);
+      sensorDataTable.draw();
+    }
+    
+    updateTotalCount(dataWithStt.length);
+
+    if (dataWithStt.length > 0) {
+      latestTimestamp = getTimestampMillis(dataWithStt[0].recordedAt);
+    }
+  } catch (error) {
+    console.error('Error loading data with date range:', error);
+    showError('Không thể tải dữ liệu. Vui lòng thử lại.');
+  } finally {
+    setLoading(false);
+  }
+}
+
+// Cập nhật tổng số bản ghi hiện có trên UI
+function updateTotalCount(count) {
+  const totalCountElement = select('total-count');
+  if (totalCountElement) {
+    totalCountElement.textContent = `Tổng: ${count} bản ghi`;
+  }
+}
+
+// Hiển thị thông báo ngắn (toast)
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span>${message}</span><span class="toast-close">✕</span>`;
+  container.appendChild(el);
+  const closer = el.querySelector('.toast-close');
+  if (closer) closer.onclick = () => el.remove();
+  setTimeout(() => el.remove(), 3500);
+}
+
+// Chuyển chuỗi thời gian thành mili giây để so sánh realtime
+function getTimestampMillis(dt) {
+  try {
+    if (!dt) return 0;
+    if (typeof dt === 'string') {
+      if (dt.includes('T')) return new Date(dt).getTime();
+      const m = dt.match(/(\d{2})-(\d{2})-(\d{4}) (\d{2}):(\d{2}):(\d{2})/);
+      if (m) return new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]), parseInt(m[4]), parseInt(m[5]), parseInt(m[6])).getTime();
+      return new Date(dt).getTime();
+    }
+    if (dt instanceof Date) return dt.getTime();
+    return 0;
+  } catch { return 0; }
+}
+
+// Hiển thị lỗi validate định dạng ngày trên UI (không dùng alert)
+function showError(message) {
+  const box = document.getElementById('history-error');
+  if (box) {
+    box.textContent = message;
+    box.style.display = 'block';
+  }
+}
+
+// Ẩn hộp lỗi
+function clearError() {
+  const box = document.getElementById('history-error');
+  if (box) box.style.display = 'none';
+}
+
+// -------- Event Handlers --------
+// Xử lý nút Tìm kiếm: ưu tiên "Tìm kiếm" theo 1 ngày, nếu không thì theo khoảng ngày
+async function handleSearch() {
+  const searchDateInput = select('search-date').value;
+  const fromDateInput = select('from-date').value;
+  const toDateInput = select('to-date').value;
+  
+  console.log('Search date:', searchDateInput);
+  console.log('From date:', fromDateInput);
+  console.log('To date:', toDateInput);
+  
+  // Check if search date is provided
+  if (searchDateInput) {
+    clearError();
+    const parsedDate = parseDateInput(searchDateInput);
+    if (parsedDate) {
+      // Load data with single date from API
+      await loadDataWithSingleDate(parsedDate);
+      return;
+    } else {
+      showError('Định dạng ngày không hợp lệ. Vui lòng nhập theo định dạng dd/mm/yyyy, ddmmyyyy hoặc ddmmyy');
+      return;
+    }
+  }
+  
+  // Check if date range is provided
+  if (fromDateInput && toDateInput) {
+    clearError();
+    const parsedFromDate = parseDateInput(fromDateInput);
+    const parsedToDate = parseDateInput(toDateInput);
+    
+    if (parsedFromDate && parsedToDate) {
+      // Load data with date range from API
+      await loadDataWithDateRange(parsedFromDate, parsedToDate);
+    } else {
+      showError('Định dạng ngày không hợp lệ. Vui lòng nhập theo định dạng dd/mm/yyyy hoặc ddmmyyyy');
+    }
+  } else {
+    showError('Vui lòng nhập ngày tìm kiếm hoặc khoảng ngày từ - đến');
+  }
+}
+
+
+// Xử lý nút Làm mới: xóa input + lỗi, tải lại toàn bộ dữ liệu
+function handleReset() {
+  select('search-date').value = '';
+  select('from-date').value = '';
+  select('to-date').value = '';
+  clearError();
+  
+  // Load all data
+  loadData();
+}
+
+// -------- Event Binding --------
+// Gắn sự kiện cho nút và phím Enter trong ô nhập
+function bindEvents() {
+  select('search-btn').addEventListener('click', handleSearch);
+  select('reset-btn').addEventListener('click', handleReset);
+  
+  select('search-date').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
+  });
+  
+  select('from-date').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
+  });
+  
+  select('to-date').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
   });
 }
 
-window.addEventListener('DOMContentLoaded',()=>{
-  if(window.flatpickr){
-    const fromPicker = flatpickr('#fromDate', {
-      locale: window.flatpickr.l10ns.vn,
-      dateFormat: 'Y-m-d',
-      altInput: true,
-      altFormat: 'd/m/Y',
-      clickOpens: false,
-      allowInput: true,
-      onChange: (sel)=>{ state.fromDate = sel[0] ? formatYmd(sel[0]) : ''; }
+// -------- Bootstrap --------
+// Bootstrap: khởi tạo trang + đăng ký WebSocket nhận realtime cảm biến
+$(document).ready(function() {
+  console.log('History page loaded with jQuery');
+  bindEvents();
+  initializeDataTable();
+  loadData();
+
+  // Realtime via WebSocket (same endpoint/topic with dashboard)
+  const WS_ENDPOINT = `${API_BASE}/ws`;
+  const TOPIC_SENSORS = `/topic/sensors`;
+  try {
+    const sock = new SockJS(WS_ENDPOINT);
+    const stomp = Stomp.over(sock);
+    stomp.debug = () => {};
+    stomp.connect({}, () => {
+      stomp.subscribe(TOPIC_SENSORS, (frame) => {
+        try {
+          const msg = JSON.parse(frame.body);
+          const ts = getTimestampMillis(msg.recordedAt || msg.time || msg.timestamp || msg.createdAt);
+          if (!latestTimestamp || ts > latestTimestamp) {
+            showToast('Có dữ liệu cảm biến mới.', 'success');
+
+            // Merge new item to top of current data set
+            const current = sensorDataTable ? sensorDataTable.rows().data().toArray() : [];
+            const newRow = { ...msg, recordedAt: msg.recordedAt || msg.time || msg.timestamp || msg.createdAt };
+            const updated = [newRow, ...current];
+            const withStt = updated.map((item, idx) => ({ ...item, stt: idx + 1 }));
+
+            // Keep current page length and page
+            const currentPage = sensorDataTable ? sensorDataTable.page() : 0;
+            const currentLen = sensorDataTable ? sensorDataTable.page.len() : 15;
+            sensorDataTable.clear();
+            sensorDataTable.rows.add(withStt);
+            sensorDataTable.draw(false);
+            sensorDataTable.page.len(currentLen).page(currentPage).draw(false);
+
+            // Highlight first row (newest)
+            const firstRow = sensorDataTable.row(0).node();
+            if (firstRow) {
+              $(firstRow).addClass('row-flash');
+              setTimeout(() => $(firstRow).removeClass('row-flash'), 1700);
+            }
+
+            latestTimestamp = ts;
+            updateTotalCount(withStt.length);
+          }
+        } catch (e) {
+          console.warn('WS payload error', e);
+        }
+      });
+    }, () => {
+      // auto-retry ws
+      setTimeout(() => window.location.reload(), 5000);
     });
-    const toPicker = flatpickr('#toDate', {
-      locale: window.flatpickr.l10ns.vn,
-      dateFormat: 'Y-m-d',
-      altInput: true,
-      altFormat: 'd/m/Y',
-      clickOpens: false,
-      allowInput: true,
-      onChange: (sel)=>{ state.toDate = sel[0] ? formatYmd(sel[0]) : ''; }
-    });
-    const fromBtn=$('fromDateBtn'); if(fromBtn) fromBtn.onclick=()=>fromPicker.open();
-    const toBtn=$('toDateBtn'); if(toBtn) toBtn.onclick=()=>toPicker.open();
-  } else {
-    $('fromDate').onchange=e=>state.fromDate=e.target.value;
-    $('toDate').onchange=e=>state.toDate=e.target.value;
+  } catch (e) {
+    console.error('WS init failed', e);
   }
-  const searchInput = $('searchDate');
-  if(searchInput){
-    searchInput.oninput=e=>state.searchDate=e.target.value;
-  }
-  // Removed unsupported metric/min-max filters
-  $('pageSize').onchange=e=>{state.size=+e.target.value; loadPage(0);};
-  const sortSelect = $('sortOrder');
-  if(sortSelect){
-    // Đồng bộ UI với state ban đầu
-    sortSelect.value = state.sort;
-    sortSelect.onchange=e=>{
-      state.sort = e.target.value;
-      state.page = 0;
-      state.lastData = [];
-      loadPage(0);
-    };
-  }
-
-  $('btnApply').onclick=()=>loadPage(0);
-  $('btnReset').onclick=()=>{
-    state.page=0; state.size=15;
-    state.fromDate=state.toDate=state.searchDate='';
-    state.sort='desc';
-    $('fromDate').value=$('toDate').value='';
-    if(searchInput) searchInput.value='';
-    $('pageSize').value=15;
-    if(sortSelect) sortSelect.value='desc';
-    loadPage(0);
-  };
-
-  $('prevBtn').onclick=()=>loadPage(state.page-1);
-  $('nextBtn').onclick=()=>loadPage(state.page+1);
-
-  loadPage(0);
-  connectWS();
 });
-
-function formatYmd(d){
-  const yyyy = d.getFullYear();
-  const mm = pad(d.getMonth()+1);
-  const dd = pad(d.getDate());
-  return `${yyyy}-${mm}-${dd}`;
-}

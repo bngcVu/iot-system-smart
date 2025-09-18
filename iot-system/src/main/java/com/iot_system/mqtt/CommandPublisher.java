@@ -5,6 +5,8 @@ import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
@@ -13,6 +15,7 @@ public class CommandPublisher {
 
     private final MqttClient mqttClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private static final Logger log = LoggerFactory.getLogger(CommandPublisher.class);
 
     @Value("${mqtt.actionTopic}")
     private String actionTopic;
@@ -34,9 +37,9 @@ public class CommandPublisher {
 
             mqttClient.publish(actionTopic, msg);
 
-            System.out.println("📤 Published to " + actionTopic + ": " + json);
+            log.info("[MQTT] Đã publish lên {}: {}", actionTopic, json);
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("[MQTT] Lỗi publish MQTT", e);
         }
     }
 }

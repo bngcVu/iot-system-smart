@@ -7,9 +7,13 @@ import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Configuration
 public class MQTTConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(MQTTConfig.class);
 
     @Value("${mqtt.host}")
     private String host;
@@ -42,7 +46,7 @@ public class MQTTConfig {
 
         client.connect(options);
 
-        System.out.println("✅ MQTT client connected to " + brokerUrl);
+        log.info("[MQTT] Đã kết nối tới {}", brokerUrl);
 
         return client;
     }

@@ -4,6 +4,8 @@ import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import jakarta.annotation.PostConstruct;
 
@@ -12,6 +14,7 @@ public class CommandSubscriber {
 
     private final MqttClient mqttClient;
     private final ApplicationEventPublisher eventPublisher;
+    private static final Logger log = LoggerFactory.getLogger(CommandSubscriber.class);
 
     @Value("${mqtt.telemetryTopic}")
     private String sensorTopic;
@@ -37,9 +40,9 @@ public class CommandSubscriber {
                 eventPublisher.publishEvent(new DeviceStatusEvent(this, topic, payload));
             });
 
-            System.out.println("✅ MQTT Subscriber subscribed to: " + actionTopic + "_ack & " + sensorTopic);
+            log.info("[MQTT] Đã subscribe tới: {} và {}", actionTopic + "_ack", sensorTopic);
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("[MQTT] Lỗi subscribe", e);
         }
     }
 }

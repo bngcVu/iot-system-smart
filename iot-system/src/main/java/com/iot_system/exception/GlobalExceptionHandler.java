@@ -17,12 +17,7 @@ public class GlobalExceptionHandler {
                 .body(new ApiResponse<>(false, ex.getMessage(), null));
     }
 
-    // Bắt NotFoundException custom
-    @ExceptionHandler(NotFoundException.class)
-    public ResponseEntity<ApiResponse<String>> handleNotFound(NotFoundException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ApiResponse<>(false, ex.getMessage(), null));
-    }
+    
 
     // Bắt lỗi validate request
     @ExceptionHandler(MethodArgumentNotValidException.class)

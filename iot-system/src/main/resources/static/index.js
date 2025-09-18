@@ -1,5 +1,5 @@
 // -------- Config --------
-const API_BASE = '';
+const API_BASE = 'http://localhost:8081';
 const DEVICES_API = `${API_BASE}/api/devices`;
 const DEVICE_CMD_API = `${API_BASE}/api/devices/command`;
 const SENSOR_API = `${API_BASE}/api/sensor-data`;
@@ -70,7 +70,9 @@ function highlightValue(el) {
 async function loadDevices() {
   try {
     const res = await fetch(DEVICES_API);
-    if (!res.ok) throw new Error('devices fetch failed');
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
     const devices = await res.json();
     const firstThree = devices.slice(0, 3);
 
@@ -82,19 +84,25 @@ async function loadDevices() {
         toggle.onchange = async (e) => {
           const action = e.target.checked ? 'ON' : 'OFF';
           try {
-            await fetch(DEVICE_CMD_API, {
+            const cmdRes = await fetch(DEVICE_CMD_API, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ deviceId: d.id, action })
             });
+            if (!cmdRes.ok) {
+              throw new Error(`Command failed: ${cmdRes.status}`);
+            }
+            console.log(`Device ${d.id} command sent: ${action}`);
           } catch (err) {
             console.error('Send command failed', err);
+            // Revert toggle state on error
+            e.target.checked = !e.target.checked;
           }
         };
       }
     });
   } catch (e) {
-    console.error(e);
+    console.error('Failed to load devices:', e);
   }
 }
 
@@ -150,22 +158,34 @@ function updateSensorCards(latest) {
   // Normalize timestamp field across different payloads
   const ts = latest.recordedAt ?? latest.time ?? latest.timestamp ?? latest.createdAt;
   const withTs = { ...latest, recordedAt: ts };
-  if (typeof latest.temperature === 'number') {
+  
+  if (typeof latest.temperature === 'number' && !isNaN(latest.temperature)) {
     const el = select('box-temp');
     el.textContent = latest.temperature.toFixed(1);
     highlightValue(el);
     select('box-temp-time').textContent = fmtTime(withTs.recordedAt);
+  } else {
+    select('box-temp').textContent = '--';
+    select('box-temp-time').textContent = fmtTime(withTs.recordedAt);
   }
-  if (typeof latest.humidity === 'number') {
+  
+  if (typeof latest.humidity === 'number' && !isNaN(latest.humidity)) {
     const el = select('box-hum');
     el.textContent = latest.humidity.toFixed(1);
     highlightValue(el);
     select('box-hum-time').textContent = fmtTime(withTs.recordedAt);
+  } else {
+    select('box-hum').textContent = '--';
+    select('box-hum-time').textContent = fmtTime(withTs.recordedAt);
   }
-  if (typeof latest.light === 'number') {
+  
+  if (typeof latest.light === 'number' && !isNaN(latest.light)) {
     const el = select('box-light');
     el.textContent = `${Math.round(latest.light)}`;
     highlightValue(el);
+    select('box-light-time').textContent = fmtTime(withTs.recordedAt);
+  } else {
+    select('box-light').textContent = '--';
     select('box-light-time').textContent = fmtTime(withTs.recordedAt);
   }
 }
@@ -193,19 +213,26 @@ async function loadInitialSensorData() {
   const maxSize = Math.max(windowSizes.temperature, windowSizes.humidity, windowSizes.light);
   try {
     const res = await fetch(`${SENSOR_API}?page=0&size=${maxSize}`);
-    if (!res.ok) throw new Error('sensor fetch failed');
+    if (!res.ok) {
+      throw new Error(`Sensor data fetch failed: ${res.status}`);
+    }
     const paged = await res.json();
     const list = Array.isArray(paged.data) ? paged.data : [];
     fillChartsFromList(list);
-    if (list[0]) updateSensorCards(list[0]);
-    else {
+    if (list[0]) {
+      updateSensorCards(list[0]);
+    } else {
       // Nếu không có dữ liệu, hiển thị thời gian hiện tại thay vì --:--:--
       const now = new Date();
       const fake = { recordedAt: now, temperature: NaN, humidity: NaN, light: NaN };
       updateSensorCards(fake);
     }
   } catch (e) {
-    console.error(e);
+    console.error('Failed to load initial sensor data:', e);
+    // Show current time even on error
+    const now = new Date();
+    const fake = { recordedAt: now, temperature: NaN, humidity: NaN, light: NaN };
+    updateSensorCards(fake);
   }
 }
 
@@ -234,14 +261,29 @@ function appendRealtimePoint(msg) {
 // -------- WebSocket --------
 let stompClient = null;
 function connectWS() {
-  const sock = new SockJS(WS_ENDPOINT);
-  stompClient = Stomp.over(sock);
-  stompClient.debug = () => {};
-  stompClient.connect({}, () => {
-    stompClient.subscribe(TOPIC_SENSORS, (frame) => {
-      try { appendRealtimePoint(JSON.parse(frame.body)); } catch (e) { console.warn('Bad WS payload', e); }
+  try {
+    const sock = new SockJS(WS_ENDPOINT);
+    stompClient = Stomp.over(sock);
+    stompClient.debug = () => {};
+    stompClient.connect({}, () => {
+      console.log('WebSocket connected successfully');
+      stompClient.subscribe(TOPIC_SENSORS, (frame) => {
+        try { 
+          appendRealtimePoint(JSON.parse(frame.body)); 
+        } catch (e) { 
+          console.warn('Bad WS payload', e); 
+        }
+      });
+    }, (err) => {
+      console.error('WS connection error', err);
+      // Retry connection after 5 seconds
+      setTimeout(connectWS, 5000);
     });
-  }, (err) => console.error('WS error', err));
+  } catch (error) {
+    console.error('Failed to create WebSocket connection', error);
+    // Retry connection after 5 seconds
+    setTimeout(connectWS, 5000);
+  }
 }
 
 // -------- UI bindings --------

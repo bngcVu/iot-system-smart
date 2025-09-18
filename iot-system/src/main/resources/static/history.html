@@ -2,28 +2,22 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>IOT System - Dữ liệu cảm biến</title>
+  <link rel="icon" type="image/png" href="img/iot.png" />
 
   <!-- Styles -->
-  <link rel="stylesheet" href="styles/common.css"/>
-  <link rel="stylesheet" href="styles/history.css"/>
-  <link rel="icon" type="image/png" href="img/iot.png"/>
+  <link rel="stylesheet" href="styles/common.css" />
+  <link rel="stylesheet" href="styles/history.css" />
+  <!-- DataTables CSS -->
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
+  <link rel="stylesheet" href="https://cdn.datatables.net/datetime/1.5.1/css/dataTables.dateTime.min.css">
+  <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
 
   <!-- Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
-
-  <!-- Flatpickr (Datepicker) -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css"/>
-
-  <!-- SockJS + Stomp -->
-  <script src="https://cdn.jsdelivr.net/npm/sockjs-client/dist/sockjs.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/stompjs/lib/stomp.min.js"></script>
-  <!-- Flatpickr JS + Vietnamese locale -->
-  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/vn.js"></script>
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+      <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Script -->
   <script defer src="history.js"></script>
@@ -42,7 +36,6 @@
         <a class="nav-item active" href="history.html">Dữ liệu cảm biến</a>
         <a class="nav-item" href="activity.html">Lịch sử hoạt động</a>
         <a class="nav-item" href="profile.html">Hồ sơ</a>
-        
       </nav>
     </div>
   </aside>
@@ -53,82 +46,86 @@
       <h1>Dữ liệu cảm biến</h1>
     </header>
 
-    <!-- Bộ lọc -->
+    <!-- Filter Card -->
     <section class="card filter-card">
       <div class="row">
-        <div class="field">
-          <label>Tìm kiếm</label>
-          <input type="text" id="search
-          Date" placeholder=""/>
-        </div>
+            <div class="field">
+              <div class="inline-field">
+                <label>Tìm kiếm</label>
+                <input type="text" id="search-date" placeholder="" />
+              </div>
+            </div>
         <div class="field">
           <label>Từ ngày</label>
-          <div class="input-row">
-            <input type="text" id="fromDate"/>
-            <button id="fromDateBtn" class="icon-btn" title="Chọn ngày">📅</button>
-          </div>
+          <input type="text" id="from-date" placeholder="" />
         </div>
         <div class="field">
           <label>Đến ngày</label>
-          <div class="input-row">
-            <input type="text" id="toDate"/>
-            <button id="toDateBtn" class="icon-btn" title="Chọn ngày">📅</button>
-          </div>
+          <input type="text" id="to-date" placeholder="" />
         </div>
-
+            <div class="field">
+              <label>Sắp xếp</label>
+              <select id="sort-order">
+                <option value="desc" selected>Mới nhất</option>
+                <option value="asc">Cũ nhất</option>
+              </select>
+            </div>
         <div class="actions">
-          <button id="btnApply" class="btn primary">Tìm kiếm</button>
-          <button id="btnReset" class="btn">Reset</button>
+          <button class="btn btn-primary" id="search-btn">Tìm kiếm</button>
+          <button class="btn btn-secondary" id="reset-btn">Làm mới</button>
         </div>
       </div>
+          <div id="history-error" class="form-error" style="display:none"></div>
     </section>
 
-    <!-- Bảng dữ liệu -->
-    <section class="card">
-      <div class="card-header">
-        <h3>Danh sách dữ liệu</h3>
-        <div style="display:flex; gap:8px; align-items: end;">
-          <div class="field" style="min-width: 160px;">
-            <label>Sắp xếp</label>
-            <select id="sortOrder">
-              <option value="desc" selected>Mới nhất</option>
-              <option value="asc">Cũ nhất</option>
-            </select>
-          </div>
-          <div class="field" style="min-width: 140px;">
-            <label>Kích thước trang</label>
-            <select id="pageSize">
-              <option>10</option>
-              <option selected>15</option>
-              <option>30</option>
-            </select>
-          </div>
+    <!-- Results Card -->
+    <section class="card results-card">
+          <div id="toast-container"></div>
+      <div class="results-header">
+        <h3>Kết quả tìm kiếm</h3>
+        <div class="results-info">
+          <span id="total-count">Tổng: 0 bản ghi</span>
         </div>
       </div>
-
-      <div class="table-wrap">
-        <table class="table" id="sensorTable">
+      
+      <div class="table-container">
+        <table id="sensor-data-table" class="data-table">
           <thead>
-          <tr>
-            <th>STT</th>
-            <th>Thời gian</th>
-            <th>Nhiệt độ (°C)</th>
-            <th>Độ ẩm (%)</th>
-            <th>Ánh sáng (Lux)</th>
-          </tr>
+            <tr>
+              <th>STT</th>
+              <th>Nhiệt độ (°C)</th>
+              <th>Độ ẩm (%)</th>
+              <th>Ánh sáng (Lux)</th>
+              <th>Thời gian</th>
+            </tr>
           </thead>
-          <tbody></tbody>
+          <tbody>
+            <!-- Data will be loaded by DataTables -->
+          </tbody>
         </table>
       </div>
 
-      <!-- Pagination -->
-      <div class="pager">
-        <button id="prevBtn" class="btn">&laquo; Trước</button>
-        <span id="pageInfo" class="muted">Trang 1 / 1</span>
-        <button id="nextBtn" class="btn">Sau &raquo;</button>
-      </div>
+      <!-- DataTables will handle pagination -->
     </section>
   </main>
 </div>
+
+<!-- Scripts -->
+<!-- jQuery -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<!-- DataTables -->
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/datetime/1.5.1/js/dataTables.dateTime.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.colVis.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/pdfmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/vfs_fonts.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+<!-- Custom script -->
+<script src="history.js"></script>
 </body>
 </html>

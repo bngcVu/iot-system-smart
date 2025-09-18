@@ -99,6 +99,15 @@ public class ActionHistoryService {
                 DateTimeFormatter f = DateTimeFormatter.ofPattern("dd/MM/yyyy");
                 return LocalDate.parse(input, f);
             }
+            if (input.matches("\\d{6}")) {
+                // Handle ddmmyy format (assume 20xx)
+                String day = input.substring(0, 2); // dd
+                String month = input.substring(2, 4); // mm
+                String year = "20" + input.substring(4, 6); // 20yy
+                String fullInput = day + month + year; // ddmm20yy
+                DateTimeFormatter f = DateTimeFormatter.ofPattern("ddMMyyyy");
+                return LocalDate.parse(fullInput, f);
+            }
         } catch (Exception ignored) {}
         return null;
     }
