@@ -1,4 +1,4 @@
-// -------- Config --------
+// -------- Cấu hình --------
 const API_BASE = 'http://localhost:8081';
 const DEVICES_API = `${API_BASE}/api/devices`;
 const DEVICE_CMD_API = `${API_BASE}/api/devices/command`;
@@ -6,7 +6,7 @@ const SENSOR_API = `${API_BASE}/api/sensor-data`;
 const WS_ENDPOINT = `${API_BASE}/ws`;
 const TOPIC_SENSORS = `/topic/sensors`;
 
-// -------- State --------
+// -------- Trạng thái --------
 const windowSizes = {
   temperature: 15,
   humidity: 15,
@@ -16,17 +16,17 @@ const windowSizes = {
 let charts = { temperature: null, humidity: null, light: null };
 let deviceIdByToggleIndex = [null, null, null];
 
-// -------- Utils --------
+// -------- Hàm tiện ích --------
 function pad2(n){ return n < 10 ? `0${n}` : `${n}`; }
 function parseDateTime(ts) {
   if (!ts && ts !== 0) return null;
   if (ts instanceof Date) return isNaN(ts) ? null : ts;
   if (typeof ts === 'number') { const d = new Date(ts); return isNaN(d) ? null : d; }
   if (typeof ts === 'string') {
-    // Try ISO first
+    // Thử định dạng ISO trước
     const iso = new Date(ts);
     if (!isNaN(iso)) return iso;
-    // Try HH:mm:ss (assume today)
+    // Thử HH:mm:ss (giả định là hôm nay)
     const hm = ts.match(/^(\d{2}):(\d{2}):(\d{2})$/);
     if (hm) {
       const now = new Date();
@@ -34,7 +34,7 @@ function parseDateTime(ts) {
       const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(hh), Number(mm), Number(ss));
       return isNaN(d) ? null : d;
     }
-    // Try dd-MM-yyyy HH:mm:ss
+    // Thử dd-MM-yyyy HH:mm:ss
     const m = ts.match(/^(\d{2})-(\d{2})-(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
     if (m) {
       const [ , dd, MM, yyyy, hh, mm, ss ] = m;
@@ -60,13 +60,13 @@ function select(id) { return document.getElementById(id); }
 function highlightValue(el) {
   if (!el) return;
   el.classList.remove('updated');
-  // reflow to restart animation
+  // Làm mới để khởi động lại animation
   // eslint-disable-next-line no-unused-expressions
   void el.offsetWidth;
   el.classList.add('updated');
 }
 
-// -------- Devices --------
+// -------- Thiết bị --------
 async function loadDevices() {
   try {
     const res = await fetch(DEVICES_API);
@@ -95,7 +95,7 @@ async function loadDevices() {
             console.log(`Device ${d.id} command sent: ${action}`);
           } catch (err) {
             console.error('Send command failed', err);
-            // Revert toggle state on error
+            // Khôi phục trạng thái toggle khi có lỗi
             e.target.checked = !e.target.checked;
           }
         };
@@ -106,7 +106,7 @@ async function loadDevices() {
   }
 }
 
-// -------- Charts --------
+// -------- Biểu đồ --------
 function createLineChart(ctx, label, color) {
   return new Chart(ctx, {
     type: 'line',
@@ -132,7 +132,7 @@ function createLineChart(ctx, label, color) {
             maxRotation: 0,
             callback: function(value, index, ticks) {
               const lbl = this.getLabelForValue(value);
-              // keep only time HH:mm:ss if label is full date
+              // Chỉ giữ lại thời gian HH:mm:ss nếu label là ngày đầy đủ
               const d = parseDateTime(lbl);
               return d ? `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}` : lbl;
             }
@@ -155,7 +155,7 @@ function initCharts() {
 
 function updateSensorCards(latest) {
   if (!latest) return;
-  // Normalize timestamp field across different payloads
+  // Chuẩn hóa trường timestamp qua các payload khác nhau
   const ts = latest.recordedAt ?? latest.time ?? latest.timestamp ?? latest.createdAt;
   const withTs = { ...latest, recordedAt: ts };
   
@@ -191,7 +191,7 @@ function updateSensorCards(latest) {
 }
 
 function fillChartsFromList(list) {
-  // list newest-first -> make oldest-first
+  // Danh sách mới nhất trước -> chuyển thành cũ nhất trước
   const ordered = [...list].reverse();
   const labels = ordered.map(r => fmtTime(r.recordedAt));
   const temps = ordered.map(r => r.temperature);
@@ -229,7 +229,7 @@ async function loadInitialSensorData() {
     }
   } catch (e) {
     console.error('Failed to load initial sensor data:', e);
-    // Show current time even on error
+    // Hiển thị thời gian hiện tại ngay cả khi có lỗi
     const now = new Date();
     const fake = { recordedAt: now, temperature: NaN, humidity: NaN, light: NaN };
     updateSensorCards(fake);
@@ -276,17 +276,17 @@ function connectWS() {
       });
     }, (err) => {
       console.error('WS connection error', err);
-      // Retry connection after 5 seconds
+      // Thử lại kết nối sau 5 giây
       setTimeout(connectWS, 5000);
     });
   } catch (error) {
     console.error('Failed to create WebSocket connection', error);
-    // Retry connection after 5 seconds
+    // Thử lại kết nối sau 5 giây
     setTimeout(connectWS, 5000);
   }
 }
 
-// -------- UI bindings --------
+// -------- Gắn sự kiện giao diện --------
 function bindWindowSelectors() {
   select('temp-window').addEventListener('change', async (e) => {
     windowSizes.temperature = parseInt(e.target.value, 10);
@@ -302,7 +302,7 @@ function bindWindowSelectors() {
   });
 }
 
-// -------- Bootstrap --------
+// -------- Khởi tạo --------
 window.addEventListener('DOMContentLoaded', async () => {
   initCharts();
   bindWindowSelectors();

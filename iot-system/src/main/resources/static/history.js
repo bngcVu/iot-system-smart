@@ -1,22 +1,22 @@
-// Trang Dữ liệu cảm biến: khởi tạo DataTable, gọi API, realtime WebSocket, highlight hàng mới
-// -------- Configuration --------
+// Trang Dữ liệu cảm biến: khởi tạo bảng dữ liệu, gọi API, cập nhật thời gian thực qua WebSocket, làm nổi bật hàng mới
+// -------- Cấu hình --------
 const API_BASE = 'http://localhost:8081';
 const SENSOR_API = `${API_BASE}/api/sensor-data`;
 
-// -------- Global Variables --------
-// Biến toàn cục cho DataTable và mốc thời gian mới nhất để so sánh realtime
+// -------- Biến toàn cục --------
+// Biến lưu trữ bảng dữ liệu và thời gian mới nhất để so sánh khi cập nhật thời gian thực
 let sensorDataTable = null;
 let minDate = null;
 let maxDate = null;
 let latestTimestamp = null;
 
-// -------- Utility Functions --------
-// Trợ giúp: lấy phần tử theo id
+// -------- Hàm tiện ích --------
+// Hàm trợ giúp: lấy phần tử HTML theo id
 function select(id) {
   return document.getElementById(id);
 }
 
-// Định dạng chuỗi thời gian từ API thành dd-MM-yyyy HH:mm:ss
+// Chuyển đổi chuỗi thời gian từ API thành định dạng dd-MM-yyyy HH:mm:ss
 function formatDateTime(dateTimeStr) {
   if (!dateTimeStr) return '--:--:--';
   
@@ -70,12 +70,12 @@ function formatValue(value, unit = '') {
   return value.toFixed(1);
 }
 
-// Bổ sung số 0 phía trước cho số < 10
+// Thêm số 0 phía trước cho số nhỏ hơn 10
 function pad2(num) {
   return num.toString().padStart(2, '0');
 }
 
-// Chuyển đổi input ngày người dùng (dd/mm/yyyy, ddmmyyyy, ddmmyy) thành ddMMyyyy
+// Chuyển đổi ngày nhập từ người dùng (dd/mm/yyyy, ddmmyyyy, ddmmyy) thành định dạng ddMMyyyy
 function parseDateInput(dateStr) {
   if (!dateStr) return null;
   
@@ -105,7 +105,7 @@ function parseDateInput(dateStr) {
   return null;
 }
 
-// Đảm bảo overlay loading tồn tại trong vùng bảng
+// Đảm bảo lớp phủ loading tồn tại trong vùng bảng
 function ensureLoadingOverlay() {
   const container = document.querySelector('.table-container');
   if (!container) return null;
@@ -120,7 +120,7 @@ function ensureLoadingOverlay() {
   return overlay;
 }
 
-// Bật/tắt trạng thái loading: khóa nút tìm kiếm + overlay bảng
+// Bật/tắt trạng thái đang tải: khóa nút tìm kiếm và hiển thị lớp phủ bảng
 function setLoading(isLoading) {
   const btn = select('search-btn');
   const overlay = ensureLoadingOverlay();
@@ -134,8 +134,8 @@ function setLoading(isLoading) {
   }
 }
 
-// -------- API Calls --------
-// Lấy dữ liệu cảm biến mới nhất (mặc định sort=desc ở backend)
+// -------- Gọi API --------
+// Lấy dữ liệu cảm biến mới nhất (mặc định sắp xếp giảm dần ở backend)
 async function fetchAllSensorData(sort = 'desc') {
   try {
     console.log('Fetching all sensor data...');
@@ -155,8 +155,8 @@ async function fetchAllSensorData(sort = 'desc') {
   }
 }
 
-// -------- DataTables Functions --------
-// Khởi tạo DataTable: cấu hình cột, ngôn ngữ, phân trang, nút xuất, ColVis
+// -------- Hàm DataTables --------
+// Khởi tạo bảng dữ liệu: cấu hình cột, ngôn ngữ, phân trang, nút xuất, chọn cột hiển thị
     function initializeDataTable() {
       if (sensorDataTable) {
         sensorDataTable.destroy();
@@ -255,8 +255,8 @@ async function fetchAllSensorData(sort = 'desc') {
 
     }
 
-// -------- Data Loading --------
-// Tải toàn bộ dữ liệu, cập nhật STT và latestTimestamp
+// -------- Tải dữ liệu --------
+// Tải toàn bộ dữ liệu, cập nhật số thứ tự và thời gian mới nhất
 async function loadData() {
   try {
     setLoading(true);
@@ -291,7 +291,7 @@ async function loadData() {
   }
 }
 
-// Tải dữ liệu theo 1 ngày (search date), kèm tham số sắp xếp asc/desc
+// Tải dữ liệu theo một ngày (ngày tìm kiếm), kèm tham số sắp xếp tăng dần/giảm dần
 async function loadDataWithSingleDate(date) {
   try {
     setLoading(true);
@@ -340,7 +340,7 @@ async function loadDataWithSingleDate(date) {
   }
 }
 
-// Tải dữ liệu theo khoảng ngày [fromDate, toDate], kèm tham số sắp xếp
+// Tải dữ liệu theo khoảng ngày [từ ngày, đến ngày], kèm tham số sắp xếp
 async function loadDataWithDateRange(fromDate, toDate) {
   try {
     setLoading(true);
@@ -414,7 +414,7 @@ async function loadAllWithSort(sort) {
   }
 }
 
-// Cập nhật tổng số bản ghi hiện có trên UI
+// Cập nhật tổng số bản ghi hiện có trên giao diện
 function updateTotalCount(count) {
   const totalCountElement = select('total-count');
   if (totalCountElement) {
@@ -422,7 +422,7 @@ function updateTotalCount(count) {
   }
 }
 
-// Hiển thị thông báo ngắn (toast)
+// Hiển thị thông báo ngắn (thông báo popup)
 function showToast(message, type = 'info') {
   const container = document.getElementById('toast-container');
   if (!container) return;
@@ -435,7 +435,7 @@ function showToast(message, type = 'info') {
   setTimeout(() => el.remove(), 3500);
 }
 
-// Chuyển chuỗi thời gian thành mili giây để so sánh realtime
+// Chuyển chuỗi thời gian thành mili giây để so sánh thời gian thực
 function getTimestampMillis(dt) {
   try {
     if (!dt) return 0;
@@ -450,7 +450,7 @@ function getTimestampMillis(dt) {
   } catch { return 0; }
 }
 
-// Hiển thị lỗi validate định dạng ngày trên UI (không dùng alert)
+// Hiển thị lỗi kiểm tra định dạng ngày trên giao diện (không dùng popup cảnh báo)
 function showError(message) {
   const box = document.getElementById('history-error');
   if (box) {
@@ -459,14 +459,14 @@ function showError(message) {
   }
 }
 
-// Ẩn hộp lỗi
+// Ẩn hộp thông báo lỗi
 function clearError() {
   const box = document.getElementById('history-error');
   if (box) box.style.display = 'none';
 }
 
-// -------- Event Handlers --------
-// Xử lý nút Tìm kiếm: ưu tiên "Tìm kiếm" theo 1 ngày, nếu không thì theo khoảng ngày
+// -------- Xử lý sự kiện --------
+// Xử lý nút Tìm kiếm: ưu tiên tìm kiếm theo một ngày, nếu không thì theo khoảng ngày
 async function handleSearch() {
   const searchDateInput = select('search-date').value;
   const fromDateInput = select('from-date').value;
@@ -510,7 +510,7 @@ async function handleSearch() {
 }
 
 
-// Xử lý nút Làm mới: xóa input + lỗi, tải lại toàn bộ dữ liệu
+// Xử lý nút Làm mới: xóa dữ liệu nhập và lỗi, tải lại toàn bộ dữ liệu
 function handleReset() {
   select('search-date').value = '';
   select('from-date').value = '';
@@ -521,8 +521,8 @@ function handleReset() {
   loadData();
 }
 
-// -------- Event Binding --------
-// Gắn sự kiện cho nút và phím Enter trong ô nhập
+// -------- Gắn sự kiện --------
+// Gắn sự kiện cho nút và phím Enter trong ô nhập liệu
 function bindEvents() {
   select('search-btn').addEventListener('click', handleSearch);
   select('reset-btn').addEventListener('click', handleReset);
@@ -546,15 +546,15 @@ function bindEvents() {
   });
 }
 
-// -------- Bootstrap --------
-// Bootstrap: khởi tạo trang + đăng ký WebSocket nhận realtime cảm biến
+// -------- Khởi tạo --------
+// Khởi tạo trang và đăng ký WebSocket để nhận dữ liệu cảm biến thời gian thực
 $(document).ready(function() {
   console.log('History page loaded with jQuery');
   bindEvents();
   initializeDataTable();
   loadData();
 
-  // Realtime via WebSocket (same endpoint/topic with dashboard)
+  // Cập nhật thời gian thực qua WebSocket (cùng endpoint/topic với dashboard)
   const WS_ENDPOINT = `${API_BASE}/ws`;
   const TOPIC_SENSORS = `/topic/sensors`;
   try {
@@ -569,13 +569,13 @@ $(document).ready(function() {
           if (!latestTimestamp || ts > latestTimestamp) {
             showToast('Có dữ liệu cảm biến mới.', 'success');
 
-            // Merge new item to top of current data set
+            // Gộp mục mới vào đầu tập dữ liệu hiện tại
             const current = sensorDataTable ? sensorDataTable.rows().data().toArray() : [];
             const newRow = { ...msg, recordedAt: msg.recordedAt || msg.time || msg.timestamp || msg.createdAt };
             const updated = [newRow, ...current];
             const withStt = updated.map((item, idx) => ({ ...item, stt: idx + 1 }));
 
-            // Keep current page length and page
+            // Giữ nguyên độ dài trang và số trang hiện tại
             const currentPage = sensorDataTable ? sensorDataTable.page() : 0;
             const currentLen = sensorDataTable ? sensorDataTable.page.len() : 15;
             sensorDataTable.clear();
@@ -583,7 +583,7 @@ $(document).ready(function() {
             sensorDataTable.draw(false);
             sensorDataTable.page.len(currentLen).page(currentPage).draw(false);
 
-            // Highlight first row (newest)
+            // Làm nổi bật hàng đầu tiên (mới nhất)
             const firstRow = sensorDataTable.row(0).node();
             if (firstRow) {
               $(firstRow).addClass('row-flash');
@@ -598,7 +598,7 @@ $(document).ready(function() {
         }
       });
     }, () => {
-      // auto-retry ws
+      // Tự động thử lại kết nối WebSocket
       setTimeout(() => window.location.reload(), 5000);
     });
   } catch (e) {

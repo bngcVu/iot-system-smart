@@ -1,19 +1,19 @@
-// Trang Lịch sử hoạt động: khởi tạo DataTable, gọi API, validate bộ lọc, hiển thị badge hành động
-// -------- Configuration --------
+// Trang Lịch sử hoạt động: khởi tạo bảng dữ liệu, gọi API, kiểm tra bộ lọc, hiển thị nhãn hành động
+// -------- Cấu hình --------
 const API_BASE = 'http://localhost:8081';
 const ACTIVITY_API = `${API_BASE}/api/device-actions`;
 
-// -------- Global Variables --------
-// Biến DataTable cho bảng lịch sử
+// -------- Biến toàn cục --------
+// Biến lưu trữ bảng dữ liệu cho bảng lịch sử
 let activityDataTable = null;
 
-// -------- Utility Functions --------
-// Trợ giúp: lấy phần tử theo id
+// -------- Hàm tiện ích --------
+// Hàm trợ giúp: lấy phần tử HTML theo id
 function select(id) {
   return document.getElementById(id);
 }
 
-// Định dạng chuỗi thời gian từ API thành dd-MM-yyyy HH:mm:ss
+// Chuyển đổi chuỗi thời gian từ API thành định dạng dd-MM-yyyy HH:mm:ss
 function formatDateTime(dateTimeStr) {
   if (!dateTimeStr) return '--:--:--';
   
@@ -60,12 +60,12 @@ function formatDateTime(dateTimeStr) {
   }
 }
 
-// Bổ sung số 0 phía trước cho số < 10
+// Thêm số 0 phía trước cho số nhỏ hơn 10
 function pad2(num) {
   return num.toString().padStart(2, '0');
 }
 
-// Chuyển đổi input ngày (dd/mm/yyyy, ddmmyyyy, ddmmyy) thành ddMMyyyy
+// Chuyển đổi ngày nhập từ người dùng (dd/mm/yyyy, ddmmyyyy, ddmmyy) thành định dạng ddMMyyyy
 function parseDateInput(dateStr) {
   if (!dateStr) return null;
   
@@ -95,7 +95,7 @@ function parseDateInput(dateStr) {
   return null;
 }
 
-// Đảm bảo overlay loading tồn tại trong vùng bảng
+// Đảm bảo lớp phủ loading tồn tại trong vùng bảng
 function ensureLoadingOverlay() {
   const container = document.querySelector('.table-container');
   if (!container) return null;
@@ -110,7 +110,7 @@ function ensureLoadingOverlay() {
   return overlay;
 }
 
-// Bật/tắt trạng thái loading: khóa nút tìm kiếm + overlay bảng
+// Bật/tắt trạng thái đang tải: khóa nút tìm kiếm và hiển thị lớp phủ bảng
 function setLoading(isLoading) {
   const btn = select('search-btn');
   const overlay = ensureLoadingOverlay();
@@ -124,8 +124,8 @@ function setLoading(isLoading) {
   }
 }
 
-// -------- API Calls --------
-// Lấy toàn bộ lịch sử hành động (mặc định sort=desc ở backend)
+// -------- Gọi API --------
+// Lấy toàn bộ lịch sử hành động (mặc định sắp xếp giảm dần ở backend)
 async function fetchAllActivityData() {
   try {
     console.log('Fetching all activity data...');
@@ -145,8 +145,8 @@ async function fetchAllActivityData() {
   }
 }
 
-// -------- DataTables Functions --------
-// Khởi tạo DataTable: định nghĩa cột, phân trang, các nút xuất (không dùng ColVis)
+// -------- Hàm DataTables --------
+// Khởi tạo bảng dữ liệu: định nghĩa cột, phân trang, các nút xuất (không dùng chọn cột hiển thị)
 function initializeDataTable() {
   if (activityDataTable) {
     activityDataTable.destroy();
@@ -228,8 +228,8 @@ function initializeDataTable() {
 
 }
 
-// -------- Data Loading --------
-// Tải toàn bộ dữ liệu và cập nhật STT
+// -------- Tải dữ liệu --------
+// Tải toàn bộ dữ liệu và cập nhật số thứ tự
 async function loadData() {
   try {
     setLoading(true);
@@ -259,7 +259,7 @@ async function loadData() {
   }
 }
 
-// Tải dữ liệu theo bộ lọc: tên thiết bị/hành động/khoảng ngày + sắp xếp asc/desc
+// Tải dữ liệu theo bộ lọc: tên thiết bị/hành động/khoảng ngày + sắp xếp tăng dần/giảm dần
 async function loadDataWithFilters(deviceName, action, fromDate, toDate) {
   try {
     setLoading(true);
@@ -315,7 +315,7 @@ async function loadDataWithFilters(deviceName, action, fromDate, toDate) {
   }
 }
 
-// Cập nhật tổng số bản ghi hiện có trên UI
+// Cập nhật tổng số bản ghi hiện có trên giao diện
 function updateTotalCount(count) {
   const totalCountElement = select('total-count');
   if (totalCountElement) {
@@ -323,7 +323,7 @@ function updateTotalCount(count) {
   }
 }
 
-// Hiển thị lỗi validate định dạng ngày trên UI
+// Hiển thị lỗi kiểm tra định dạng ngày trên giao diện
 function showError(message) {
   const box = document.getElementById('activity-error');
   if (box) {
@@ -332,13 +332,13 @@ function showError(message) {
   }
 }
 
-// Ẩn hộp lỗi
+// Ẩn hộp thông báo lỗi
 function clearError() {
   const box = document.getElementById('activity-error');
   if (box) box.style.display = 'none';
 }
 
-// -------- Event Handlers --------
+// -------- Xử lý sự kiện --------
 // Xử lý Tìm kiếm: phân biệt chuỗi nhập là tên thiết bị hay là ngày
 async function handleSearch() {
   const searchInput = select('search-input').value.trim();
@@ -357,20 +357,57 @@ async function handleSearch() {
   
   // Handle search input
   if (searchInput) {
-    const parsedDate = parseDateInput(searchInput);
-    if (parsedDate) {
-      // It's a date, use as date range
-      fromDate = parsedDate;
-      toDate = parsedDate;
+    clearError();
+    
+    // Kiểm tra xem input có phải định dạng ngày hợp lệ (ddmmyyyy, ddmmyy, dd/mm/yyyy)
+    const isValidDateFormat = /^(\d{2}\/\d{2}\/\d{4}|\d{6}|\d{8})$/.test(searchInput);
+    console.log('Search input:', searchInput, 'isValidDateFormat:', isValidDateFormat);
+    
+    if (isValidDateFormat) {
+      const parsedDate = parseDateInput(searchInput);
+      if (parsedDate) {
+        // Đây là ngày hợp lệ, sử dụng làm khoảng ngày
+        fromDate = parsedDate;
+        toDate = parsedDate;
+      } else {
+        // Định dạng hợp lệ nhưng ngày không hợp lệ
+        showError('Ngày không hợp lệ. Vui lòng kiểm tra lại ngày tháng');
+        return;
+      }
     } else {
-      // It's a device name
-      deviceName = searchInput;
+      // Kiểm tra xem có phải định dạng tên thiết bị hợp lệ (chữ cái, số, không có ký tự đặc biệt ngoại trừ khoảng trắng)
+      const isValidDeviceNameFormat = /^[a-zA-ZÀ-ỹ0-9\s]+$/.test(searchInput);
+      console.log('Search input:', searchInput, 'isValidDeviceNameFormat:', isValidDeviceNameFormat);
+      
+      if (isValidDeviceNameFormat) {
+        // Kiểm tra xem có khớp với tên thiết bị đã biết (LED1, LED2, LED3, v.v.)
+        const knownDevicePattern = /^LED\d+$/i;
+        if (knownDevicePattern.test(searchInput)) {
+          // Đây là tên thiết bị đã biết
+          deviceName = searchInput;
+        } else {
+          // Định dạng hợp lệ nhưng tên thiết bị không tồn tại
+          showError('Tên thiết bị hoặc định dạng không đúng. Vui lòng nhập đúng tên thiết bị hoặc ngày theo định dạng dd/mm/yyyy, ddmmyyyy, ddmmyy');
+          return;
+        }
+      } else {
+        // Định dạng input không hợp lệ
+        showError('Định dạng không hợp lệ. Vui lòng nhập đúng tên thiết bị hoặc ngày theo định dạng dd/mm/yyyy, ddmmyyyy, ddmmyy');
+        return;
+      }
     }
   }
   
-  // Handle date range inputs
-  if (fromDateInput && toDateInput) {
+  // Xử lý input khoảng ngày
+  if (fromDateInput || toDateInput) {
     clearError();
+    
+    // Kiểm tra xem cả hai ngày đã được cung cấp chưa
+    if (!fromDateInput || !toDateInput) {
+      showError('Vui lòng nhập đầy đủ ngày bắt đầu và ngày kết thúc');
+      return;
+    }
+    
     const parsedFromDate = parseDateInput(fromDateInput);
     const parsedToDate = parseDateInput(toDateInput);
     
@@ -383,12 +420,12 @@ async function handleSearch() {
     }
   }
   
-  // Load data with filters
+  // Tải dữ liệu với bộ lọc
   await loadDataWithFilters(deviceName, action, fromDate, toDate);
 }
 
 
-// Xử lý Làm mới: xóa input + lỗi, tải lại tất cả
+// Xử lý Làm mới: xóa dữ liệu nhập và lỗi, tải lại tất cả
 function handleReset() {
   select('search-input').value = '';
   select('from-date').value = '';
@@ -396,12 +433,12 @@ function handleReset() {
   select('action-filter').value = '';
   clearError();
   
-  // Load all data
+  // Tải toàn bộ dữ liệu
   loadData();
 }
 
-// -------- Event Binding --------
-// Gắn sự kiện click và Enter cho các ô nhập
+// -------- Gắn sự kiện --------
+// Gắn sự kiện click và Enter cho các ô nhập liệu
 function bindEvents() {
   select('search-btn').addEventListener('click', handleSearch);
   select('reset-btn').addEventListener('click', handleReset);
@@ -425,7 +462,7 @@ function bindEvents() {
   });
 }
 
-// -------- Bootstrap --------
+// -------- Khởi tạo --------
 $(document).ready(function() {
   console.log('Activity page loaded with jQuery');
   bindEvents();
