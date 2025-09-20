@@ -16,21 +16,16 @@ public class SensorDataController {
     }
 
     /**
-     * API cũ: tìm theo ngày hoặc khoảng ngày (có phân trang)
+     * API tìm kiếm theo ngày/giờ (có phân trang)
+     * Hỗ trợ: dd-MM-yyyy HH:mm:ss, dd-MM-yyyy, ddMMyyyy, dd-MM-yyyy HH:mm
      */
     @GetMapping("/search")
     public PagedResponse<SensorReadingDTO> search(
             @RequestParam(required = false) String date,
-            @RequestParam(required = false) String fromDate,
-            @RequestParam(required = false) String toDate,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "15") int size,
-            // sort: "asc" | "desc"; mặc định desc (mới nhất trước) để giữ hành vi cũ
             @RequestParam(defaultValue = "desc") String sort
     ) {
-        if (fromDate != null && toDate != null) {
-            return sensorDataService.searchRange(fromDate, toDate, page, size, sort);
-        }
         return sensorDataService.search(date, page, size, sort);
     }
 
@@ -44,7 +39,12 @@ public class SensorDataController {
             @RequestParam(defaultValue = "15") int size,
             @RequestParam(defaultValue = "desc") String sort
     ) {
+        // Nếu không có dateStr, sử dụng getAllData để tối ưu performance
+        if (dateStr == null || dateStr.trim().isEmpty()) {
+            return sensorDataService.getAllData(page, size, sort);
+        }
         return sensorDataService.search(dateStr, page, size, sort);
     }
+
 
 }

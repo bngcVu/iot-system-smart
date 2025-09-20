@@ -14,6 +14,9 @@ public class SensorReadingDTO {
     @JsonFormat(pattern = "dd-MM-yyyy HH:mm:ss", timezone = "Asia/Ho_Chi_Minh")
     private LocalDateTime recordedAt;
 
+    // Default constructor
+    public SensorReadingDTO() {}
+
     public SensorReadingDTO(int stt, Double temperature, Double humidity, Double light, LocalDateTime recordedAt) {
         this.stt = stt;
         this.temperature = temperature;
@@ -32,10 +35,19 @@ public class SensorReadingDTO {
         );
     }
 
-    // Getter
+    // Getters and Setters
     public int getStt() { return stt; }
+    public void setStt(int stt) { this.stt = stt; }
+    
     public Double getTemperature() { return temperature; }
+    public void setTemperature(Double temperature) { this.temperature = temperature; }
+    
     public Double getHumidity() { return humidity; }
+    public void setHumidity(Double humidity) { this.humidity = humidity; }
+    
     public Double getLight() { return light; }
+    public void setLight(Double light) { this.light = light; }
+    
     public LocalDateTime getRecordedAt() { return recordedAt; }
+    public void setRecordedAt(LocalDateTime recordedAt) { this.recordedAt = recordedAt; }
 }
