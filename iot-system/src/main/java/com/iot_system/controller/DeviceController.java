@@ -23,7 +23,9 @@ public class DeviceController {
     }
 
     @PostMapping("/command")
-    public void sendCommand(@RequestBody DeviceControlDTO dto) {
-        deviceService.sendCommand(dto);
+    @ResponseStatus(org.springframework.http.HttpStatus.ACCEPTED)
+    public java.util.Map<String, String> sendCommand(@RequestBody DeviceControlDTO dto) {
+        String correlationId = deviceService.sendCommand(dto);
+        return java.util.Map.of("correlationId", correlationId, "status", "ACCEPTED");
     }
 }

@@ -7,6 +7,7 @@ import com.iot_system.domain.entity.SensorData;
 import com.iot_system.domain.enums.SensorMetric;
 import com.iot_system.repository.SensorDataRepository;
 import com.iot_system.util.DateTimeUtils;
+import com.iot_system.exception.InvalidDateFormatException;
 import com.iot_system.util.ResponseUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -68,8 +69,7 @@ public class SensorDataService {
                     searchMessage = "Tìm thấy kết quả trong phút " + dateStr;
                 }
             } else {
-                return new PagedResponse<>("Sai định dạng. Hỗ trợ: HH:mm:ss dd/MM/yyyy, dd-MM-yyyy HH:mm:ss, dd-MM-yyyy HH:mm, ddMMyyyy, dd/MM/yyyy, ddMMyy",
-                        List.of(), page, size, 0, 0);
+                throw new InvalidDateFormatException("Hỗ trợ: dd-MM-yyyy HH:mm:ss, dd-MM-yyyy HH:mm, dd-MM-yyyy, ddMMyyyy, dd/MM/yyyy, ddMMyy");
             }
         }
 

@@ -14,10 +14,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     
     <!-- Scripts -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
     
     <!-- SweetAlert2 -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -55,7 +58,7 @@
                                 <circle cx="11" cy="11" r="8"></circle>
                                 <path d="m21 21-4.35-4.35"></path>
                             </svg>
-                            <input type="text" id="searchInput" placeholder="Tìm kiếm theo ngày (dd-MM-yyyy HH:mm:ss, dd-MM-yyyy, ddMMyyyy, dd-MM-yyyy HH:mm)" class="search-input">
+                            <input type="text" id="searchInput" placeholder="Nhập tìm kiếm..." class="search-input">
                         </div>
                     </div>
                     
@@ -90,15 +93,24 @@
 
             <div class="data-section">
                 <!-- Page size selector at top -->
-                <div class="page-size-controls">
-                    <div class="page-size-selector">
-                        <label for="pageSizeSelect">Hiển thị:</label>
+                <div class="page-size-controls" style="display:flex;justify-content:flex-end;align-items:center;gap:12px">
+                    <button id="btn-export-csv-history" class="btn btn-secondary" style="display:flex;align-items:center;gap:6px">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        <span>CSV</span>
+                    </button>
+                    <span style="opacity:.6">|</span>
+                    <div class="page-size-selector" style="display:flex;align-items:center;gap:6px">
+                        <label for="pageSizeSelect">Hiển thị</label>
                         <select id="pageSizeSelect" class="filter-select">
-                            <option value="15">15 bản ghi</option>
-                            <option value="30">30 bản ghi</option>
-                            <option value="50">50 bản ghi</option>
-                            <option value="100">100 bản ghi</option>
-                            <option value="1000">Hiển thị tất cả</option>
+                            <option value="15">15 bản ghi</option>
+                            <option value="30">30 bản ghi</option>
+                            <option value="50">50 bản ghi</option>
+                            <option value="100">100 bản ghi</option>
+                            <option value="1000">Tất cả</option>
                         </select>
                     </div>
                 </div>
@@ -110,12 +122,11 @@
                                 <th>STT</th>
                                 <th>Nhiệt độ (°C)</th>
                                 <th>Độ ẩm (%)</th>
-                                <th>Ánh sáng (lux)</th>
+                                <th>Ánh sáng (Lux)</th>
                                 <th>Thời gian</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <!-- Data will be loaded here -->
                         </tbody>
                     </table>
                 </div>
@@ -141,6 +152,6 @@
 
     <div id="toast" class="toast"></div>
 
-    <script defer src="js/history-vanilla.js?v=1"></script>
+    <script type="module" src="js/history-vanilla.js?v=2"></script>
 </body>
 </html>

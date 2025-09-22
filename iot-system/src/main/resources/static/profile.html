@@ -7,14 +7,17 @@
   <link rel="icon" type="image/png" href="img/iot.png" />
 
   <link rel="stylesheet" href="css/common.css"/>
+  <link rel="stylesheet" href="css/profile.css"/>
   <link rel="icon" type="image/png" href="img/iot.png"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"/>
 
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet"/>
   <script defer src="js/profile.js"></script>
 </head>
-<body>
+<body class="profile-page">
 <div class="app">
   <aside class="sidebar">
     <div>
@@ -44,7 +47,7 @@
       <div class="profile-header large">
         <img src="img/vu.jpg" alt="avatar" class="avatar-hero"/>
         <div class="identity">
-          <div class="fullname">Bùi Ngọc Vũ</div>
+          <div class="fullname"><i class="fa-solid fa-user"></i><span>Bùi Ngọc Vũ</span></div>
           <div class="email">buingocvuuu@gmail.com</div>
         </div>
       </div>
@@ -52,38 +55,61 @@
       <div class="form-grid">
         <div class="field">
           <label>Họ và tên</label>
-          <input type="text" value="Bùi Ngọc Vũ" readonly />
+          <div style="position:relative;">
+            <i class="fa-solid fa-user" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#6b7280;"></i>
+            <input type="text" value="Bùi Ngọc Vũ" readonly style="padding-left:34px;"/>
+          </div>
         </div>
         <div class="field">
           <label>Ngày sinh</label>
-          <input type="text" value="" placeholder="07/07/2003" readonly />
+          <div style="position:relative;">
+            <i class="fa-solid fa-cake-candles" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#6b7280;"></i>
+            <input type="text" value="" placeholder="07/07/2003" readonly style="padding-left:34px;"/>
+          </div>
         </div>
 
         <div class="field">
           <label>Mã sinh viên</label>
-          <input type="text" value="B22DCCN910" readonly />
+          <div style="position:relative;">
+            <i class="fa-regular fa-id-card" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#6b7280;"></i>
+            <input type="text" value="B22DCCN910" readonly style="padding-left:34px;"/>
+          </div>
         </div>
         <div class="field">
           <label>Mã lớp</label>
-          <input type="text" value="D22HTTT05" readonly />
+          <div style="position:relative;">
+            <i class="fa-solid fa-tag" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#6b7280;"></i>
+            <input type="text" value="D22HTTT05" readonly style="padding-left:34px;"/>
+          </div>
         </div>
 
         <div class="field">
-          <label>Link github</label>
-          <div class="input-row">
-            <input id="githubLink" type="text" value="https://github.com/bngcVu/iot-system-smart" readonly />
-            <button class="copy-btn" data-target="githubLink">Copy</button>
+          <label>GitHub</label>
+          <div class="input-row" style="gap:0.5rem; align-items:center;">
+            <div style="position:relative;flex:1;">
+              <i class="fa-brands fa-github" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#6b7280;"></i>
+              <input id="githubLink" class="thread-opener" type="text" value="https://github.com/bngcVu/iot-system-smart" readonly style="padding-left:34px; cursor:pointer;"/>
+            </div>
+            <button class="btn btn-secondary thread-open-btn" data-target="githubLink" title="Mở thread"><i class="fa-solid fa-up-right-from-square"></i></button>
           </div>
         </div>
         <div class="field">
-          <label>Link figma</label>
-          <div class="input-row">
-            <input id="figmaLink" type="text" value="https://www.figma.com/design/izKVYF7ZHibKTZa302cZMI/IOT-UNG-DUNG?node-id=0-1&p=f&t=0X7zS1zu1mi6mvTW-0" readonly />
-            <button class="copy-btn" data-target="figmaLink">Copy</button>
+          <label>Figma</label>
+          <div class="input-row" style="gap:0.5rem; align-items:center;">
+            <div style="position:relative;flex:1;">
+              <i class="fa-brands fa-figma" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#6b7280;"></i>
+              <input id="figmaLink" class="thread-opener" type="text" value="https://www.figma.com/design/izKVYF7ZHibKTZa302cZMI/IOT-UNG-DUNG?node-id=0-1&p=f&t=0X7zS1zu1mi6mvTW-0" readonly style="padding-left:34px; cursor:pointer;"/>
+            </div>
+            <button class="btn btn-secondary thread-open-btn" data-target="figmaLink" title="Mở thread"><i class="fa-solid fa-up-right-from-square"></i></button>
           </div>
         </div>
+        
+
       </div>
     </section>
+
+    
+
   </main>
 </div>
 </body>

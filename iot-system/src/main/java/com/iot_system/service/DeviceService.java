@@ -48,14 +48,15 @@ public class DeviceService {
      * Publish lệnh xuống MQTT (chưa update DB, chờ ACK từ ESP32)
      */
     @Transactional
-    public void sendCommand(DeviceControlDTO dto) {
+    public String sendCommand(DeviceControlDTO dto) {
         Device device = deviceRepo.findById(dto.deviceId())
                 .orElseThrow(() -> new IllegalArgumentException("Thiết bị không tồn tại"));
 
-        // ✅ dùng helper method thay vì build JSON thủ công
-        commandPublisher.sendAction(device.getId().intValue(), dto.action().toString());
+        String correlationId = java.util.UUID.randomUUID().toString();
+        commandPublisher.sendAction(device.getId().intValue(), dto.action().toString(), correlationId);
 
         log.info("[SERVICE] Đã gửi lệnh -> deviceId={}, hành động={}", device.getId(), dto.action());
+        return correlationId;
     }
 
 }

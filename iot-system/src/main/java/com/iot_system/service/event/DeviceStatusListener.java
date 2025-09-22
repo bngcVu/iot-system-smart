@@ -64,6 +64,7 @@ public class DeviceStatusListener {
         try {
             int deviceId = json.get("deviceId").asInt();
             String state = json.get("state").asText();
+            String correlationId = json.has("correlationId") ? json.get("correlationId").asText() : null;
 
             Device device = deviceRepository.findById((long) deviceId)
                     .orElseThrow(() -> new RuntimeException("Device not found: " + deviceId));
@@ -82,6 +83,7 @@ public class DeviceStatusListener {
             Map<String, Object> wsPayload = new HashMap<>();
             wsPayload.put("deviceId", deviceId);
             wsPayload.put("state", state);
+            if (correlationId != null) wsPayload.put("correlationId", correlationId);
             // Thống nhất format thời gian dd-MM-yyyy HH:mm:ss
             DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss");
             wsPayload.put("recordedAt", history.getExecutedAt().format(fmt));
@@ -98,7 +100,17 @@ public class DeviceStatusListener {
             String deviceUid = json.has("deviceUid") ? json.get("deviceUid").asText() : null;
             Double temperature = json.has("temperature") ? json.get("temperature").asDouble() : null;
             Double humidity = json.has("humidity") ? json.get("humidity").asDouble() : null;
-            Double light = json.has("light") ? json.get("light").asDouble() : null;
+            Double light = null;
+            if (json.has("light")) {
+                light = json.get("light").asDouble();
+            } else if (json.has("light_level")) {
+                light = json.get("light_level").asDouble();
+            }
+
+            // Sanitize values: accept zero, ignore sentinel -1
+            if (temperature != null && temperature == -1.0) temperature = null;
+            if (humidity != null && humidity == -1.0) humidity = null;
+            if (light != null && light == -1.0) light = null;
 
             if (deviceUid != null) {
                 Device device = deviceRepository.findByDeviceUid(deviceUid)
@@ -117,6 +129,8 @@ public class DeviceStatusListener {
                 DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss");
                 wsPayload.put("recordedAt", LocalDateTime.now().format(fmt));
                 wsTemplate.convertAndSend("/topic/sensors", wsPayload);
+
+                
 
             } else {
                 log.warn("[SERVICE] Thiếu deviceUid trong payload");

@@ -21,7 +21,7 @@ public class SensorData {
     @Column(name = "humidity")
     private Double humidity;
 
-    @Column(name = "light_level")
+    @Column(name = "light")
     private Double light;
 
     @Column(name = "recorded_at", nullable = false)

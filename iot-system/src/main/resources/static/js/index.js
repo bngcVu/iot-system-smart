@@ -1,16 +1,12 @@
-// -------- Cấu hình --------
-const API_BASE = 'http://localhost:8081';
-const DEVICES_API = `${API_BASE}/api/devices`;
-const DEVICE_CMD_API = `${API_BASE}/api/devices/command`;
-const SENSOR_API = `${API_BASE}/api/sensor-data`;
-const WS_ENDPOINT = `${API_BASE}/ws`;
-const TOPIC_SENSORS = `/topic/sensors`;
+// Module hóa cấu hình và API/WS
+import { ENDPOINTS, WS } from './config.js';
+import { fetchDevices, sendDeviceCommand } from './api/devices.js';
+import { fetchSensorsPage } from './api/sensors.js';
+import { connectStomp } from './realtime/wsClient.js';
 
 // -------- Trạng thái --------
 let windowSize = 15;
 
-let combinedChart = null;
-let apexChart = null;
 let echart = null;
 let pauseRealtime = false;
 const lastFlashAt = { temp: 0, hum: 0, light: 0 };
@@ -80,6 +76,8 @@ function closeSettings() {
   modal.style.display = 'none'; modal.setAttribute('aria-hidden','true');
 }
 let deviceIdByToggleIndex = [null, null, null];
+// Pending command tracking: deviceId -> { correlationId, desired, timer, toggleIndex }
+const pendingMap = new Map();
 
 // -------- Hàm tiện ích --------
 function pad2(n){ return n < 10 ? `0${n}` : `${n}`; }
@@ -142,6 +140,13 @@ function highlightValue(el) {
   );
 }
 
+// -------- Number formatting helpers --------
+function formatValueFlexible(num, maxDecimals) {
+  if (!Number.isFinite(num)) return '--';
+  const str = num.toFixed(maxDecimals);
+  return str.replace(/\.0+$|(?<=\.\d*[1-9])0+$/g, '');
+}
+
 // -------- Icons & Animations --------
 function injectIcons() {
   const iconLight = select('icon-light');
@@ -171,7 +176,7 @@ function injectIcons() {
       <path id="w3" d="M16 14h4"/>
     </svg>`;
 
-  console.log('Icons injected:', { iconLight: !!iconLight, iconFan: !!iconFan, iconAir: !!iconAir });
+  
 }
 
 function injectSensorIcons() {
@@ -222,12 +227,9 @@ function setIconState(kind, isOn) {
 // -------- Thiết bị --------
 async function loadDevices() {
   try {
-    const res = await fetch(DEVICES_API);
-    if (!res.ok) {
-      throw new Error(`HTTP error! status: ${res.status}`);
-    }
-    const devices = await res.json();
-    const firstThree = devices.slice(0, 3);
+    const devices = await fetchDevices();
+    const controls = devices.filter(d => d && d.deviceUid !== 'esp32-1');
+    const firstThree = controls.slice(0, 3);
 
     const titleFallbacks = ['LIGHT', 'FAN', 'AIR'];
     const headers = document.querySelectorAll('.cards .card.device .card-header h3');
@@ -266,31 +268,28 @@ async function loadDevices() {
             ease: "power2.inOut"
           });
           
+          // Optimistic: disable toggle until ACK or timeout
+          toggle.disabled = true;
           try {
-            const cmdRes = await fetch(DEVICE_CMD_API, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ deviceId: d.id, action })
-            });
-            if (!cmdRes.ok) {
-              throw new Error(`Command failed: ${cmdRes.status}`);
-            }
-            console.log(`Device ${d.id} command sent: ${action}`);
+            const resp = await sendDeviceCommand(d.id, action);
+            const correlationId = resp && resp.correlationId ? String(resp.correlationId) : null;
+            console.log(`Device ${d.id} command sent: ${action}`, correlationId ? `(cid=${correlationId})` : '');
             const rtt = Math.round(performance.now() - sentAt);
             const pingEl = select(`dev${idx}-ping`);
             if (pingEl) pingEl.textContent = `${rtt} ms`;
-          // update icon states on success
-          if (idx === 0) setIconState('light', action === 'ON');
-          if (idx === 1) setIconState('fan', action === 'ON');
-          if (idx === 2) setIconState('air', action === 'ON');
-            
-            // Success animation
-            gsap.to(e.target.closest('.card'), {
-              backgroundColor: action === 'ON' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-              duration: 0.3,
-              yoyo: true,
-              repeat: 1
-            });
+            // Start timeout rollback if no ACK
+            const timer = setTimeout(() => {
+              try {
+                const pend = pendingMap.get(d.id);
+                if (!pend) return;
+                // rollback UI
+                const t = document.getElementById(`led${idx}-toggle`);
+                if (t) t.checked = !e.target.checked;
+                toggle.disabled = false;
+                pendingMap.delete(d.id);
+              } catch {}
+            }, 2000);
+            pendingMap.set(d.id, { correlationId, desired: action, timer, toggleIndex: idx });
           } catch (err) {
             console.error('Send command failed', err);
             // Error animation
@@ -302,6 +301,7 @@ async function loadDevices() {
             });
             // Khôi phục trạng thái toggle khi có lỗi
             e.target.checked = !e.target.checked;
+            toggle.disabled = false;
           }
         };
       }
@@ -339,25 +339,28 @@ function updateSensorCards(latest) {
   // Chuẩn hóa trường timestamp qua các payload khác nhau
   const ts = latest.recordedAt ?? latest.time ?? latest.timestamp ?? latest.createdAt;
   const withTs = { ...latest, recordedAt: ts };
+  lastUiUpdateAt = Date.now();
   
-  if (typeof latest.temperature === 'number' && !isNaN(latest.temperature)) {
+  const tNum = Number(latest.temperature);
+  if (Number.isFinite(tNum)) {
     const el = select('box-temp');
-    el.textContent = latest.temperature.toFixed(1);
+    el.textContent = formatValueFlexible(tNum, 1);
     highlightValue(el);
     flashSensorIcon('temp');
     const prevVal = Number(el.getAttribute('data-prev'));
     const trendElT = select('trend-temp');
     if (!isNaN(prevVal) && trendElT) {
-      trendElT.className = 'trend-arrow ' + (latest.temperature > prevVal ? 'trend-up' : latest.temperature < prevVal ? 'trend-down' : '');
+      trendElT.className = 'trend-arrow ' + (tNum > prevVal ? 'trend-up' : tNum < prevVal ? 'trend-down' : '');
       if (trendElT.className.includes('trend-')) gsap.fromTo(trendElT, { scale: 0.6, opacity: 0.3 }, { scale: 1, opacity: 1, duration: 0.25 });
     }
-    el.setAttribute('data-prev', String(latest.temperature));
+    el.setAttribute('data-prev', String(tNum));
     select('box-temp-time').textContent = fmtTime(withTs.recordedAt);
     highlightValue(select('box-temp-time'));
     const dTemp = select('delta-temp');
     if (dTemp && !isNaN(prevVal)) {
-      const delta = (latest.temperature - prevVal).toFixed(1);
-      dTemp.textContent = (delta > 0 ? '+' : '') + delta;
+      const deltaNum = tNum - prevVal;
+      const delta = formatValueFlexible(deltaNum, 1);
+      dTemp.textContent = (deltaNum > 0 ? '+' : '') + delta;
       dTemp.className = 'delta-badge ' + (delta > 0 ? 'delta-up' : delta < 0 ? 'delta-down' : 'delta-zero');
     }
     // Alert check
@@ -381,24 +384,26 @@ function updateSensorCards(latest) {
     select('box-temp-time').textContent = fmtTime(withTs.recordedAt);
   }
   
-  if (typeof latest.humidity === 'number' && !isNaN(latest.humidity)) {
+  const hNum = Number(latest.humidity);
+  if (Number.isFinite(hNum)) {
     const el = select('box-hum');
-    el.textContent = latest.humidity.toFixed(1);
+    el.textContent = formatValueFlexible(hNum, 1);
     highlightValue(el);
     flashSensorIcon('hum');
     const prevVal = Number(el.getAttribute('data-prev'));
     const trendElH = select('trend-hum');
     if (!isNaN(prevVal) && trendElH) {
-      trendElH.className = 'trend-arrow ' + (latest.humidity > prevVal ? 'trend-up' : latest.humidity < prevVal ? 'trend-down' : '');
+      trendElH.className = 'trend-arrow ' + (hNum > prevVal ? 'trend-up' : hNum < prevVal ? 'trend-down' : '');
       if (trendElH.className.includes('trend-')) gsap.fromTo(trendElH, { scale: 0.6, opacity: 0.3 }, { scale: 1, opacity: 1, duration: 0.25 });
     }
-    el.setAttribute('data-prev', String(latest.humidity));
+    el.setAttribute('data-prev', String(hNum));
     select('box-hum-time').textContent = fmtTime(withTs.recordedAt);
     highlightValue(select('box-hum-time'));
     const dHum = select('delta-hum');
     if (dHum && !isNaN(prevVal)) {
-      const delta = (latest.humidity - prevVal).toFixed(1);
-      dHum.textContent = (delta > 0 ? '+' : '') + delta;
+      const deltaNum = hNum - prevVal;
+      const delta = formatValueFlexible(deltaNum, 1);
+      dHum.textContent = (deltaNum > 0 ? '+' : '') + delta;
       dHum.className = 'delta-badge ' + (delta > 0 ? 'delta-up' : delta < 0 ? 'delta-down' : 'delta-zero');
     }
     // Alert check
@@ -421,24 +426,26 @@ function updateSensorCards(latest) {
     select('box-hum-time').textContent = fmtTime(withTs.recordedAt);
   }
   
-  if (typeof latest.light === 'number' && !isNaN(latest.light)) {
+  const lNum = Number(latest.light);
+  if (Number.isFinite(lNum)) {
     const el = select('box-light');
-    el.textContent = `${Math.round(latest.light)}`;
+    el.textContent = formatValueFlexible(lNum, 4);
     highlightValue(el);
     flashSensorIcon('light');
     const prevVal = Number(el.getAttribute('data-prev'));
     const trendElL = select('trend-light');
     if (!isNaN(prevVal) && trendElL) {
-      trendElL.className = 'trend-arrow ' + (latest.light > prevVal ? 'trend-up' : latest.light < prevVal ? 'trend-down' : '');
+      trendElL.className = 'trend-arrow ' + (lNum > prevVal ? 'trend-up' : lNum < prevVal ? 'trend-down' : '');
       if (trendElL.className.includes('trend-')) gsap.fromTo(trendElL, { scale: 0.6, opacity: 0.3 }, { scale: 1, opacity: 1, duration: 0.25 });
     }
-    el.setAttribute('data-prev', String(latest.light));
+    el.setAttribute('data-prev', String(lNum));
     select('box-light-time').textContent = fmtTime(withTs.recordedAt);
     highlightValue(select('box-light-time'));
     const dLight = select('delta-light');
     if (dLight && !isNaN(prevVal)) {
-      const delta = Math.round(latest.light - prevVal);
-      dLight.textContent = (delta > 0 ? '+' : '') + delta;
+      const deltaNum = lNum - prevVal;
+      const delta = formatValueFlexible(deltaNum, 4);
+      dLight.textContent = (deltaNum > 0 ? '+' : '') + delta;
       dLight.className = 'delta-badge ' + (delta > 0 ? 'delta-up' : delta < 0 ? 'delta-down' : 'delta-zero');
     }
     // Alert check
@@ -463,7 +470,7 @@ function updateSensorCards(latest) {
 }
 
 function fillChartsFromList(list) {
-  console.log(`Filling chart with ${list.length} data points, windowSize: ${windowSize}`);
+  
   
   const ordered = [...list].reverse();
   const labels = ordered.map(r => fmtTime(r.recordedAt));
@@ -471,32 +478,27 @@ function fillChartsFromList(list) {
   const hums = ordered.map(r => r.humidity);
   const lights = ordered.map(r => r.light);
 
-  // GSAP transition + ECharts update
-  gsap.to('#combinedChart', {
-    opacity: 0.7,
-    scale: 0.98,
-    duration: 0.2,
-    ease: "power2.inOut",
-    onComplete: () => {
-      const slicedLabels = labels.slice(-windowSize);
-      const slicedTemps = temps.slice(-windowSize);
-      const slicedHums = hums.slice(-windowSize);
-      const slicedLights = lights.slice(-windowSize);
-      
-      console.log(`Displaying ${slicedLabels.length} points on chart`);
-      
-      echart.setOption({
-        xAxis: { data: slicedLabels },
-        series: [
-          { name: 'Nhiệt độ (°C)', data: slicedTemps },
-          { name: 'Độ ẩm (%)', data: slicedHums },
-          { name: 'Ánh sáng (Lux)', data: slicedLights }
-        ]
-      });
-      if (echart) echart.resize();
-      gsap.to('#combinedChart', { opacity: 1, scale: 1, duration: 0.3, ease: "power2.out" });
-    }
-  });
+  const slicedLabels = labels.slice(-windowSize);
+  const slicedTemps = temps.slice(-windowSize);
+  const slicedHums = hums.slice(-windowSize);
+  const slicedLights = lights.slice(-windowSize);
+
+  const option = {
+    xAxis: { type: 'category', data: slicedLabels },
+    yAxis: [
+      { type: 'value', name: '°C / %' },
+      { type: 'value', name: 'Lux' }
+    ],
+    series: [
+      { name: 'Nhiệt độ (°C)', type: 'line', smooth: true, data: slicedTemps },
+      { name: 'Độ ẩm (%)', type: 'line', smooth: true, data: slicedHums },
+      { name: 'Ánh sáng (Lux)', type: 'line', smooth: true, yAxisIndex: 1, data: slicedLights }
+    ]
+  };
+  echart.setOption(option, false, true);
+  if (echart) echart.resize();
+  // Subtle post-update animation only
+  gsap.fromTo('#combinedChart', { opacity: 0.9, scale: 0.99 }, { opacity: 1, scale: 1, duration: 0.2, ease: "power2.out" });
 }
 
 function exportChartCSV() {
@@ -524,12 +526,9 @@ function saveChartPNG() {
 
 async function loadInitialSensorData() {
   try {
-    const res = await fetch(`${SENSOR_API}?page=0&size=${windowSize}`);
-    if (!res.ok) {
-      throw new Error(`Sensor data fetch failed: ${res.status}`);
-    }
-    const paged = await res.json();
+    const paged = await fetchSensorsPage({ page: 0, size: windowSize, sort: 'desc' });
     const list = Array.isArray(paged.data) ? paged.data : [];
+    
     fillChartsFromList(list);
     if (list[0]) {
       updateSensorCards(list[0]);
@@ -548,9 +547,20 @@ async function loadInitialSensorData() {
 
 function appendRealtimePoint(msg) {
   if (pauseRealtime) return;
-  const ts = msg.recordedAt ?? msg.time ?? msg.timestamp ?? msg.createdAt;
+  const tsRaw = msg.recordedAt ?? msg.time ?? msg.timestamp ?? msg.createdAt;
+  const parsed = parseDateTime(tsRaw);
+  if (!parsed) return;
+  const ts = parsed;
+  const tsMs = ts.getTime();
+  if (!Number.isFinite(tsMs)) return;
+  if (tsMs <= lastAppliedTsMs) return;
   const label = fmtTime(ts);
   const { temperature, humidity, light } = msg;
+  const tNum = Number(temperature);
+  const hNum = Number(humidity);
+  const lNum = Number(light);
+  const key = `${tsMs}|${Number.isFinite(tNum)?tNum:''}|${Number.isFinite(hNum)?hNum:''}|${Number.isFinite(lNum)?lNum:''}`;
+  if (key === lastAppliedKey) return;
 
   const opt = echart.getOption();
   const labelsNow = (opt.xAxis && opt.xAxis[0] && opt.xAxis[0].data) ? [...opt.xAxis[0].data] : [];
@@ -559,9 +569,9 @@ function appendRealtimePoint(msg) {
   const s2 = opt.series && opt.series[2] ? [...opt.series[2].data] : [];
 
   labelsNow.push(label);
-  s0.push(typeof temperature === 'number' ? temperature : null);
-  s1.push(typeof humidity === 'number' ? humidity : null);
-  s2.push(typeof light === 'number' ? light : null);
+  s0.push(Number.isFinite(tNum) ? tNum : null);
+  s1.push(Number.isFinite(hNum) ? hNum : null);
+  s2.push(Number.isFinite(lNum) ? lNum : null);
 
   while (labelsNow.length > windowSize) labelsNow.shift();
   while (s0.length > windowSize) s0.shift();
@@ -575,32 +585,64 @@ function appendRealtimePoint(msg) {
   if (echart) echart.resize();
 
   updateSensorCards({ ...msg, recordedAt: ts });
+  lastAppliedTsMs = tsMs;
+  lastAppliedKey = key;
 }
 
 // -------- WebSocket --------
 let stompClient = null;
+let lastWsSensorAt = 0;
+let lastUiUpdateAt = 0;
+let lastAppliedTsMs = 0;
+let lastAppliedKey = '';
 function connectWS() {
   try {
-    const sock = new SockJS(WS_ENDPOINT);
-    stompClient = Stomp.over(sock);
-    stompClient.debug = () => {};
-    stompClient.connect({}, () => {
-      console.log('WebSocket connected successfully');
-      stompClient.subscribe(TOPIC_SENSORS, (frame) => {
-        try { 
-          appendRealtimePoint(JSON.parse(frame.body)); 
-        } catch (e) { 
-          console.warn('Bad WS payload', e); 
-        }
-      });
-    }, (err) => {
-      console.error('WS connection error', err);
-      // Thử lại kết nối sau 5 giây
-      setTimeout(connectWS, 5000);
+    stompClient = connectStomp({
+      onSensors: (payload) => {
+        try { lastWsSensorAt = Date.now(); appendRealtimePoint(payload); } catch {}
+      },
+      onDevices: (ack) => {
+        try {
+          const idx = deviceIdByToggleIndex.findIndex(id => id === ack.deviceId);
+          if (idx >= 0) {
+            // Match ACK with pending command if any
+            const pend = pendingMap.get(ack.deviceId);
+            if (pend) {
+              // Ignore status pushes that are not the correlated ACK to avoid flicker
+              const toggleEl = document.getElementById(`led${idx}-toggle`);
+              // Case 1: API gave correlationId but WS does not include it -> ignore
+              if (pend.correlationId && !ack.correlationId) {
+                if (toggleEl) toggleEl.disabled = true;
+                return;
+              }
+              // Case 2: We have correlationId and it doesn't match -> ignore
+              if (pend.correlationId && ack.correlationId && ack.correlationId !== pend.correlationId) {
+                if (toggleEl) toggleEl.disabled = true;
+                return;
+              }
+              // Case 3: We don't have correlationId from API, accept only if state equals desired
+              if (!pend.correlationId && ack.state !== pend.desired) {
+                if (toggleEl) toggleEl.disabled = true;
+                return;
+              }
+              clearTimeout(pend.timer);
+              pendingMap.delete(ack.deviceId);
+            }
+            const toggle = document.getElementById(`led${idx}-toggle`);
+            if (toggle) {
+              toggle.checked = ack.state === 'ON';
+              toggle.disabled = false;
+            }
+            if (idx === 0) setIconState('light', ack.state === 'ON');
+            if (idx === 1) setIconState('fan', ack.state === 'ON');
+            if (idx === 2) setIconState('air', ack.state === 'ON');
+            const pingEl = document.getElementById(`dev${idx}-ping`);
+            if (pingEl && ack.recordedAt) pingEl.textContent = 'ACK';
+          }
+        } catch {}
+      }
     });
   } catch (error) {
-    console.error('Failed to create WebSocket connection', error);
-    // Thử lại kết nối sau 5 giây
     setTimeout(connectWS, 5000);
   }
 }
@@ -701,4 +743,28 @@ window.addEventListener('DOMContentLoaded', async () => {
   
   await loadInitialSensorData();
   connectWS();
+  // Realtime fallback: poll latest when WS silent > 5s
+  setInterval(async () => {
+    try {
+      const now = Date.now();
+      const wsSilent = now - lastWsSensorAt >= 5000;
+      const uiStale = now - lastUiUpdateAt >= 4000;
+      if (!wsSilent && !uiStale) return;
+      const res = await fetch(`${SENSOR_API}?page=0&size=1&sort=desc&_=${Date.now()}`);
+      if (!res.ok) return;
+      const paged = await res.json();
+      const item = Array.isArray(paged.data) && paged.data[0] ? paged.data[0] : null;
+      if (item) {
+        const parsedTs = parseDateTime(item.recordedAt ?? item.time ?? item.timestamp ?? item.createdAt);
+        if (!parsedTs) return;
+        const ageMs = Date.now() - parsedTs.getTime();
+        if (ageMs <= 5000) {
+          
+          appendRealtimePoint(item);
+        } else {
+          // stale sample -> ignore to avoid fake realtime
+        }
+      }
+    } catch {}
+  }, 2000);
 });

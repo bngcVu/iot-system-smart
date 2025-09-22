@@ -1,3 +1,6 @@
+import { fetchActionsPage } from './api/actions.js';
+import { downloadCsvFromRows, sanitizeCsvField } from './utils/csv.js';
+
 class ActivityManager {
     constructor() {
         this.currentPage = 0;
@@ -28,6 +31,7 @@ class ActivityManager {
         this.nextPageBtn = document.getElementById('nextPageBottom');
         this.pageNumbers = document.getElementById('pageNumbersBottom');
         this.toast = document.getElementById('toast');
+        this.csvBtn = document.getElementById('btn-export-csv-activity');
     }
 
     bindEvents() {
@@ -44,7 +48,9 @@ class ActivityManager {
         this.prevPageBtn.addEventListener('click', () => this.goToPreviousPage());
         this.nextPageBtn.addEventListener('click', () => this.goToNextPage());
         
-        // No need for alignment fix with history table CSS
+        if (this.csvBtn) {
+            this.csvBtn.addEventListener('click', () => this.exportCSV());
+        }
         
     }
 
@@ -55,37 +61,25 @@ class ActivityManager {
         this.showLoading();
         
         try {
-            // Wait for 2 seconds to show loading effect
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
-            const params = new URLSearchParams({
+            await new Promise(resolve => setTimeout(resolve, 800));
+            const data = await fetchActionsPage({
                 page: this.currentPage,
                 size: this.pageSize,
-                sort: this.sortSelect.value
+                sort: this.sortSelect.value,
+                dateStr: this.searchInput.value.trim(),
+                deviceType: this.deviceFilter.value,
+                action: this.actionFilter.value
             });
-
-            const searchValue = this.searchInput.value.trim();
-            if (searchValue) {
-                params.append('dateStr', searchValue);
+            if (data && typeof data.message === 'string' && data.message.toLowerCase().includes('sai định dạng')) {
+                this.currentData = [];
+                this.totalElements = 0;
+                this.totalPages = 0;
+                this.renderInvalidFormatMessage();
+                this.updatePaginationInfo();
+                this.updatePaginationButtons();
+                this.showToast('Không có dữ liệu. Vui lòng nhập đúng định dạng', 'warning');
+                return;
             }
-
-            const deviceValue = this.deviceFilter.value;
-            if (deviceValue) {
-                params.append('deviceType', deviceValue);
-            }
-
-            const actionValue = this.actionFilter.value;
-            if (actionValue) {
-                params.append('action', actionValue);
-            }
-
-            const response = await fetch(`/api/device-actions/search?${params}`);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            const data = await response.json();
             this.handleDataResponse(data);
             
         } catch (error) {
@@ -103,12 +97,7 @@ class ActivityManager {
         this.totalElements = data.totalElements || 0;
         this.totalPages = data.totalPages || 0;
         
-        // Debug: Log first item to see the data structure
-        if (this.currentData.length > 0) {
-            console.log('First activity item:', this.currentData[0]);
-            console.log('ExecutedAt value:', this.currentData[0].executedAt);
-            console.log('ExecutedAt type:', typeof this.currentData[0].executedAt);
-        }
+        
         
         this.updatePaginationInfo();
         this.renderTable();
@@ -162,10 +151,7 @@ class ActivityManager {
         row.innerHTML = `
             <td>${stt}</td>
             <td>
-                <div class="device-name">
-                    <span class="device-icon">${this.getDeviceIcon(item.deviceName)}</span>
-                    ${item.deviceName}
-                </div>
+                <div class="device-name">${item.deviceName}</div>
             </td>
             <td>
                 <span class="action-badge ${actionClass}">${actionText}</span>
@@ -208,8 +194,6 @@ class ActivityManager {
     formatDateTime(dateTimeStr) {
         if (!dateTimeStr) return '--:--:--';
         
-        console.log('Formatting date:', dateTimeStr, 'Type:', typeof dateTimeStr);
-        
         try {
             // Handle dd-MM-yyyy HH:mm:ss format from backend (expected format)
             if (typeof dateTimeStr === 'string' && dateTimeStr.includes('-')) {
@@ -228,15 +212,9 @@ class ActivityManager {
                         const second = timePart[2];
                         
                         const isoString = `${year}-${month}-${day}T${hour}:${minute}:${second}`;
-                        console.log('Created ISO string:', isoString);
-                        
                         const date = new Date(isoString);
-                        console.log('Parsed date:', date);
-                        
                         if (!isNaN(date.getTime())) {
-                            // Return in the same format as backend: dd-MM-yyyy HH:mm:ss
                             const formatted = `${day}-${month}-${year} ${hour}:${minute}:${second}`;
-                            console.log('Formatted result:', formatted);
                             return formatted;
                         }
                     }
@@ -271,10 +249,8 @@ class ActivityManager {
             
             // Fallback to standard Date parsing
             const date = new Date(dateTimeStr);
-            console.log('Fallback parsed date:', date);
             
             if (!isNaN(date.getTime())) {
-                // Format as dd-MM-yyyy HH:mm:ss
                 const day = String(date.getDate()).padStart(2, '0');
                 const month = String(date.getMonth() + 1).padStart(2, '0');
                 const year = date.getFullYear();
@@ -283,12 +259,9 @@ class ActivityManager {
                 const second = String(date.getSeconds()).padStart(2, '0');
                 
                 const formatted = `${day}-${month}-${year} ${hour}:${minute}:${second}`;
-                console.log('Fallback formatted result:', formatted);
                 return formatted;
             }
             
-            // If all parsing fails, return original string
-            console.log('All parsing failed, returning original:', dateTimeStr);
             return dateTimeStr;
         } catch (error) {
             console.error('Error formatting date:', dateTimeStr, error);
@@ -312,6 +285,19 @@ class ActivityManager {
         `;
     }
 
+    renderInvalidFormatMessage() {
+        this.tbody.innerHTML = `
+            <tr>
+                <td colspan="4" style="text-align: center; padding: 2rem; color: #6b7280;">
+                    <div style="display: inline-flex; flex-direction: column; align-items: center; gap: 0.6rem;">
+                        <div style="font-size: 1.4rem;">⚠️</div>
+                        <div>Không có dữ liệu. Vui lòng nhập đúng định dạng</div>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }
+
     updatePaginationInfo() {
         const start = this.currentPage * this.pageSize + 1;
         const end = Math.min(start + this.currentData.length - 1, this.totalElements);
@@ -323,6 +309,43 @@ class ActivityManager {
         this.nextPageBtn.disabled = this.currentPage >= this.totalPages - 1;
         
         this.renderPageNumbers();
+    }
+
+    exportCSV() {
+        try {
+            const rows = [];
+            rows.push('stt,deviceName,action,executedAt');
+            const trs = Array.from(this.tbody ? this.tbody.querySelectorAll('tr') : []);
+            if (trs.length > 0) {
+                trs.forEach(r => {
+                    const c = r.cells;
+                    if (c && c.length >= 4) {
+                        const stt = sanitizeCsvField((c[0].innerText || '').trim());
+                        const name = sanitizeCsvField((c[1].innerText || '').trim());
+                        const action = sanitizeCsvField((c[2].innerText || '').trim());
+                        const ts = sanitizeCsvField((c[3].innerText || '').trim());
+                        rows.push(`${stt},${name},${action},${ts}`);
+                    }
+                });
+            } else if (Array.isArray(this.currentData) && this.currentData.length > 0) {
+                this.currentData.forEach((item, idx) => {
+                    const stt = this.currentPage * this.pageSize + idx + 1;
+                    rows.push([
+                        sanitizeCsvField(stt),
+                        sanitizeCsvField(item.deviceName || ''),
+                        sanitizeCsvField(this.getActionText(item.action) || ''),
+                        sanitizeCsvField(this.formatDateTime(item.executedAt))
+                    ].join(','));
+                });
+            } else {
+                this.showToast('Không có dữ liệu để xuất', 'warning');
+                return;
+            }
+            downloadCsvFromRows(rows, `activity-history-${Date.now()}.csv`);
+        } catch (e) {
+            console.error('Export CSV error', e);
+            this.showToast('Xuất CSV thất bại', 'error');
+        }
     }
 
     renderPageNumbers() {

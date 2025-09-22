@@ -4,6 +4,7 @@ public enum DeviceType {
     ALL,
     LIGHT,
     FAN,
-    AIR
+    AIR,
+    ESP32
 }
 

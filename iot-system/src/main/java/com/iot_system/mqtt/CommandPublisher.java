@@ -24,11 +24,12 @@ public class CommandPublisher {
         this.mqttClient = mqttClient;
     }
 
-    public void sendAction(int deviceId, String action) {
+    public void sendAction(int deviceId, String action, String correlationId) {
         try {
             Map<String, Object> payload = Map.of(
                     "deviceId", deviceId,
-                    "action", action
+                    "action", action,
+                    "correlationId", correlationId
             );
 
             String json = objectMapper.writeValueAsString(payload);

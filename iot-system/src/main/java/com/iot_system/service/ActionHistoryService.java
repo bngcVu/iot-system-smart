@@ -8,6 +8,7 @@ import com.iot_system.domain.enums.DeviceType;
 import com.iot_system.repository.DeviceActionHistoryRepository;
 import com.iot_system.repository.DeviceRepository;
 import com.iot_system.util.DateTimeUtils;
+import com.iot_system.exception.InvalidDateFormatException;
 import com.iot_system.util.ResponseUtils;
 import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Page;
@@ -69,8 +70,7 @@ public class ActionHistoryService {
                     searchMessage = "Tìm thấy kết quả trong khoảng thời gian " + dateStr;
                 }
             } else {
-                return new PagedResponse<>("Sai định dạng. Hỗ trợ: dd-MM-yyyy HH:mm:ss, dd-MM-yyyy HH:mm, dd-MM-yyyy, ddMMyyyy, dd/MM/yyyy, ddMMyy",
-                        List.of(), page, size, 0, 0);
+                throw new InvalidDateFormatException("Hỗ trợ: dd-MM-yyyy HH:mm:ss, dd-MM-yyyy HH:mm, dd-MM-yyyy, ddMMyyyy, dd/MM/yyyy, ddMMyy");
             }
         }
 

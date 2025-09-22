@@ -31,4 +31,5 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         // Prefix khi FE gửi message ngược lên BE (nếu cần)
         registry.setApplicationDestinationPrefixes("/app");
     }
+
 }

@@ -1,4 +1,9 @@
 // Vanilla JS Sensor Data Manager
+// Lịch sử cảm biến - quản lý UI và dữ liệu (module hóa nhẹ)
+import { downloadCsvFromRows, sanitizeCsvField } from './utils/csv.js';
+import { fetchSensorsPage } from './api/sensors.js';
+import { connectStomp } from './realtime/wsClient.js';
+
 class VanillaSensorDataManager {
     constructor() {
         this.currentPage = 0;
@@ -9,18 +14,24 @@ class VanillaSensorDataManager {
         this.isLoading = false;
         this.totalElements = 0;
         this.totalPages = 0;
-        this.lastDataIds = new Set(); // Track IDs of previously loaded data
         this.lastUpdateTime = null; // Track last update timestamp
-        this.newDataThreshold = 5 * 60 * 1000; // 5 minutes in milliseconds
         this.isFromAutoRefresh = false; // Flag to distinguish auto refresh from search
+        this.ws = null;
+        this.wsConnected = false;
+        this.wsDebounce = false;
+        this.pollTimerId = null;
+        this.lastWsMessageAt = 0;
         
         this.init();
+        this.tabulator = null;
     }
 
     init() {
         this.bindEvents();
         this.loadInitialData();
         this.startAutoRefresh();
+        this.connectWS();
+        this.startLiveMonitor();
     }
 
     bindEvents() {
@@ -86,12 +97,83 @@ class VanillaSensorDataManager {
                 }
             }
         });
+
+        const exportBtn = document.getElementById('btn-export-csv-history');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => {
+                this.exportCSV();
+            });
+        }
+    }
+
+    connectWS() {
+        try {
+            this.ws = connectStomp({
+                onConnected: () => {
+                    this.wsConnected = true;
+                    if (this.pollTimerId) { clearInterval(this.pollTimerId); this.pollTimerId = null; }
+                },
+                onDisconnected: () => {
+                    this.wsConnected = false;
+                    if (!this.pollTimerId) {
+                        this.pollTimerId = setInterval(() => {
+                            if (!this.isLoading) { this.refreshData(); }
+                        }, 6000);
+                    }
+                },
+                onSensors: (payload) => {
+                    this.lastWsMessageAt = Date.now();
+                    if (this.currentPage === 0) {
+                        this.applyWsItem(payload);
+                    } else {
+                        // do nothing when not on first page
+                    }
+                }
+            });
+        } catch (e) {}
+    }
+
+    startLiveMonitor() {
+        if (this._liveTimer) return;
+        this._liveTimer = setInterval(() => {
+            if (this.isLoading) return;
+            if (this.currentPage !== 0) return;
+            this.fetchData(true);
+        }, 6000);
+    }
+
+    applyWsItem(item) {
+        try {
+            const normalized = {
+                temperature: item.temperature !== null && item.temperature !== undefined ? parseFloat(item.temperature) : null,
+                humidity: item.humidity !== null && item.humidity !== undefined ? parseFloat(item.humidity) : null,
+                light: item.light !== null && item.light !== undefined ? parseFloat(item.light) : null,
+                recordedAt: item.recordedAt || item.time || item.timestamp || item.createdAt
+            };
+            if (this.tabulator) {
+                this.tabulator.addData([
+                    {
+                        stt: 1,
+                        temperature: normalized.temperature,
+                        humidity: normalized.humidity,
+                        light: normalized.light,
+                        recordedAt: normalized.recordedAt
+                    }
+                ], true);
+                const data = this.tabulator.getData();
+                if (data.length > this.pageSize) {
+                    this.tabulator.deleteRow(data[data.length - 1].id);
+                }
+            }
+            const ts = new Date(normalized.recordedAt).getTime();
+            if (!isNaN(ts)) this.lastUpdateTime = ts;
+        } catch {}
     }
 
     async loadInitialData() {
         this.showSkeleton();
         try {
-            await this.fetchData();
+            await this.fetchData(true);
         } catch (error) {
             console.error('Load initial data error:', error);
             this.showEmptyTable();
@@ -101,10 +183,12 @@ class VanillaSensorDataManager {
     async performSearch() {
         const searchValue = document.getElementById('searchInput').value.trim();
         
-        // Validate date format if search value is provided
         if (searchValue && !this.isValidDateFormat(searchValue)) {
-            this.showToast('Định dạng ngày không hợp lệ! Vui lòng nhập theo định dạng: dd-MM-yyyy hoặc dd-MM-yyyy HH:mm:ss', 'error');
-            return; // Don't update state or reload data
+            this.renderInvalidFormatMessage();
+            this.updateTableInfo({ data: [], totalElements: 0, totalPages: 0, currentPage: 0 });
+            this.setPaginationLoading(false);
+            this.setPageSizeLoading(false);
+            return;
         }
         
         // Only update state if validation passes
@@ -126,51 +210,35 @@ class VanillaSensorDataManager {
         }
     }
 
-    async fetchData() {
+    async fetchData(silent = false) {
         if (this.isLoading) return;
         
         this.isLoading = true;
-        this.showTableLoading();
+        if (!silent) this.showTableLoading();
         
         try {
             // Wait for 800ms to show loading effect
             await new Promise(resolve => setTimeout(resolve, 800));
             
-            const params = new URLSearchParams({
+            const result = await fetchSensorsPage({
                 page: this.currentPage,
                 size: this.pageSize,
-                sort: this.currentSort
+                sort: this.currentSort,
+                metric: this.mapFilterToMetric(this.currentFilter) || 'ALL',
+                date: this.currentSearch || ''
             });
-            const metric = this.mapFilterToMetric(this.currentFilter);
-            if (metric) {
-                params.append('metric', metric);
+            if (result && typeof result.message === 'string' && result.message.toLowerCase().includes('sai định dạng')) {
+                this.renderInvalidFormatMessage();
+                this.updateTableInfo({ ...result, data: [], totalElements: 0, totalPages: 0, currentPage: 0 });
+                return;
             }
-            
-            if (this.currentSearch) {
-                params.append('date', this.currentSearch);
-            }
-            
-            const endpoint = this.currentSearch ? '/api/sensor-data/search' : '/api/sensor-data';
-            const response = await fetch(`http://localhost:8081${endpoint}?${params}`);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            
-            const result = await response.json();
-            
-            console.log('=== API Response Debug ===');
-            console.log('Full API Response:', result);
-            
             if (!result.data) {
                 console.warn('No data field in response:', result);
                 throw new Error(result.message || 'Không có dữ liệu');
             }
             
             const sensorData = result.data || [];
-            console.log('Sensor Data array:', sensorData);
-            console.log('Sensor Data length:', sensorData.length);
-            console.log('=== End API Response Debug ===');
+            
             
             // Normalize data
             const normalizedData = sensorData.map((item, index) => ({
@@ -196,7 +264,7 @@ class VanillaSensorDataManager {
             this.showEmptyTable();
         } finally {
             this.isLoading = false;
-            this.hideTableLoading();
+            if (!silent) this.hideTableLoading();
             this.setPaginationLoading(false);
             this.setPageSizeLoading(false);
         }
@@ -204,28 +272,18 @@ class VanillaSensorDataManager {
 
     updateTable(data) {
         const tbody = document.querySelector('#sensorDataTable tbody');
-        const table = document.querySelector('#sensorDataTable');
+        const table = document.getElementById('sensorDataTable');
+        if (!tbody) return;
         tbody.innerHTML = '';
-        
-        if (data.length === 0) {
+        if (!Array.isArray(data) || data.length === 0) {
             this.showEmptyTable();
             return;
         }
-
-        // Detect new data based on timestamp
-        const currentTime = new Date().getTime();
         let hasNewData = false;
-        
-        data.forEach((item, index) => {
+        data.forEach((item) => {
             const row = document.createElement('tr');
-            
-            // Check if this is new data based on timestamp
             const isNewData = this.isNewData(item);
-            if (isNewData) {
-                row.classList.add('new-data-row');
-                hasNewData = true;
-            }
-            
+            if (isNewData) { row.classList.add('new-data-row'); hasNewData = true; }
             row.innerHTML = `
                 <td>${item.stt}</td>
                 <td>${this.formatSensorValue(item.temperature, 'temperature', isNewData)}</td>
@@ -235,24 +293,18 @@ class VanillaSensorDataManager {
             `;
             tbody.appendChild(row);
         });
-
-        // Add gentle table highlight if there's new data
-        if (hasNewData) {
+        if (hasNewData && table) {
             table.classList.add('has-new-data');
-            // Remove the class after animation completes
-            setTimeout(() => {
-                table.classList.remove('has-new-data');
-            }, 3000);
+            setTimeout(() => table.classList.remove('has-new-data'), 3000);
         }
-
-        // Smooth animation for table rows
         this.animateTableRows();
-
-        // Update last update time only if this is from auto refresh
-        if (this.isFromAutoRefresh) {
-            this.lastUpdateTime = currentTime;
-        }
-
+        try {
+            const newest = data.reduce((maxTs, item) => {
+                const ts = new Date(item.recordedAt).getTime();
+                return isNaN(ts) ? maxTs : Math.max(maxTs, ts);
+            }, 0);
+            if (newest > 0) this.lastUpdateTime = newest;
+        } catch {}
         this.applyColumnFilter();
     }
 
@@ -306,13 +358,7 @@ class VanillaSensorDataManager {
     }
 
     startAutoRefresh() {
-        // Auto refresh continuously to check for new data
-        console.log('Starting continuous auto refresh...');
-        setInterval(() => {
-            if (!this.isLoading) {
-                this.refreshData();
-            }
-        }, 1000); // 1 second
+        // disabled per user request; rely on WS prepend only
     }
 
     async refreshData() {
@@ -326,20 +372,15 @@ class VanillaSensorDataManager {
             console.log('Auto refreshing data...');
             this.isFromAutoRefresh = true; // Set flag for auto refresh
             const metric = this.mapFilterToMetric(this.currentFilter) || 'ALL';
-            const response = await fetch(`/api/sensor-data?page=0&size=${this.pageSize}&sort=${this.currentSort}&metric=${metric}`);
+            const response = await fetch(`/api/sensor-data?page=0&size=${this.pageSize}&sort=${this.currentSort}&metric=${metric}&_=${Date.now()}`);
             const result = await response.json();
             
             if (result && result.data) {
-                // Check if there's actually new data before updating
-                const hasNewData = this.checkForNewData(result.data);
-                
+                const hasNewData = this.lastUpdateTime ? this.checkForNewData(result.data) : true;
                 if (hasNewData) {
                     console.log('New sensor data detected! Updating table...');
                     this.updateTable(result.data);
                     this.updateTableInfo(result);
-                    this.showToast('Có dữ liệu cảm biến mới!', 'success');
-                } else {
-                    console.log('No new data, skipping table update');
                 }
             }
         } catch (error) {
@@ -379,22 +420,35 @@ class VanillaSensorDataManager {
         }
     }
 
-    showEmptyTable() {
+    showEmptyTable(message) {
         const tbody = document.querySelector('#sensorDataTable tbody');
-        const visibleColumns = this.getVisibleColumnCount();
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="${visibleColumns}" style="text-align: center; padding: 2rem; color: #6b7280;">
-                    <div style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
-                        <div style="font-size: 1.2rem;">📊</div>
-                        <div>Không có dữ liệu cảm biến</div>
-                        <div style="font-size: 0.8rem; color: #9ca3af;">
-                            Dữ liệu sẽ được hiển thị khi có thiết bị gửi thông tin
-                        </div>
-                    </div>
-                </td>
-            </tr>
-        `;
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td colspan="5" style="text-align: center; padding: 2rem; color: #6b7280;">
+                <div style="display: inline-flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+                    <div style="font-size: 1.2rem;">📊</div>
+                    <div>${message || 'Không có dữ liệu cảm biến'}</div>
+                    <div style="font-size: 0.8rem; color: #9ca3af;">Dữ liệu sẽ được hiển thị khi có thiết bị gửi thông tin</div>
+                </div>
+            </td>`;
+        tbody.appendChild(tr);
+    }
+
+    renderInvalidFormatMessage() {
+        const tbody = document.querySelector('#sensorDataTable tbody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td colspan="5" style="text-align: center; padding: 2rem; color: #6b7280;">
+                <div style="display: inline-flex; flex-direction: column; align-items: center; gap: 0.6rem;">
+                    <div style="font-size: 1.4rem;">⚠️</div>
+                    <div>Không có dữ liệu. Vui lòng nhập đúng định dạng</div>
+                </div>
+            </td>`;
+        tbody.appendChild(tr);
     }
 
     applyColumnFilter() {
@@ -535,6 +589,29 @@ class VanillaSensorDataManager {
         document.getElementById('recordCount').textContent = recordCountText;
     }
 
+    exportCSV() {
+        try {
+            const tbody = document.querySelector('#sensorDataTable tbody');
+            const trs = Array.from(tbody ? tbody.querySelectorAll('tr') : []);
+            const lines = ['stt,temperature,humidity,light,recordedAt'];
+            trs.forEach(r => {
+                const c = r.cells;
+                if (c && c.length >= 5) {
+                    const stt = sanitizeCsvField((c[0].innerText || '').trim());
+                    const t = sanitizeCsvField((c[1].innerText || '').trim());
+                    const h = sanitizeCsvField((c[2].innerText || '').trim());
+                    const l = sanitizeCsvField((c[3].innerText || '').trim());
+                    const ts = sanitizeCsvField((c[4].innerText || '').trim());
+                    lines.push(`${stt},${t},${h},${l},${ts}`);
+                }
+            });
+            downloadCsvFromRows(lines, `sensor-history-${Date.now()}.csv`);
+        } catch (e) {
+            console.error('Export CSV error', e);
+            this.showToast('Xuất CSV thất bại', 'error');
+        }
+    }
+
     updatePaginationInfo(result) {
         const prevBtn = document.getElementById('prevPage');
         const nextBtn = document.getElementById('nextPage');
@@ -569,7 +646,7 @@ class VanillaSensorDataManager {
     manualRefreshData() {
         this.isFromAutoRefresh = false; // Ensure this is not from auto refresh
         this.setPaginationLoading(true);
-        this.fetchData();
+        this.fetchData(true);
     }
 
     setButtonLoading(loading) {
@@ -636,33 +713,17 @@ class VanillaSensorDataManager {
     }
 
     showTableLoading() {
-        const tbody = document.querySelector('#sensorDataTable tbody');
-        tbody.innerHTML = '';
-        
-        // Show SweetAlert2 loading for 800ms only
-        Swal.fire({
-            title: 'Đang tải dữ liệu...',
-            text: 'Vui lòng chờ trong giây lát',
-            allowOutsideClick: false,
-            allowEscapeKey: false,
-            showConfirmButton: false,
-            timer: 800, // Auto close after 800ms
-            timerProgressBar: true,
-            didOpen: () => {
-                Swal.showLoading();
-            }
-        });
+        // No blocking modal
     }
 
     hideTableLoading() {
-        // Close SweetAlert2 loading
-        Swal.close();
+        // No-op (no blocking modal)
     }
 
     showSkeleton() {
         const tbody = document.querySelector('#sensorDataTable tbody');
+        if (!tbody) return;
         tbody.innerHTML = '';
-        
         for (let i = 0; i < 5; i++) {
             const skeletonRow = document.createElement('tr');
             skeletonRow.className = 'skeleton-row';
