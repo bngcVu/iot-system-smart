@@ -15,6 +15,7 @@ class ActivityManager {
     initializeElements() {
         this.searchInput = document.getElementById('searchInput');
         this.sortSelect = document.getElementById('sortSelect');
+        this.actionFilter = document.getElementById('actionFilter');
         this.deviceFilter = document.getElementById('deviceFilter');
         this.searchBtn = document.getElementById('searchBtn');
         this.pageSizeSelect = document.getElementById('pageSizeSelect');
@@ -36,6 +37,7 @@ class ActivityManager {
         });
         
         this.sortSelect.addEventListener('change', () => this.handleSearch());
+        this.actionFilter.addEventListener('change', () => this.handleSearch());
         this.deviceFilter.addEventListener('change', () => this.handleSearch());
         this.pageSizeSelect.addEventListener('change', () => this.handlePageSizeChange());
         
@@ -70,6 +72,11 @@ class ActivityManager {
             const deviceValue = this.deviceFilter.value;
             if (deviceValue) {
                 params.append('deviceName', deviceValue);
+            }
+
+            const actionValue = this.actionFilter.value;
+            if (actionValue) {
+                params.append('action', actionValue);
             }
 
             const response = await fetch(`/api/device-actions/search?${params}`);
