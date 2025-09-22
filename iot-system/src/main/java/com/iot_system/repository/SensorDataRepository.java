@@ -17,10 +17,17 @@ public interface SensorDataRepository extends JpaRepository<SensorData, Long>, J
            SELECT s FROM SensorData s
            WHERE (:start IS NULL OR s.recordedAt >= :start)
              AND (:end IS NULL OR s.recordedAt < :end)
+             AND (
+                   :metricName = 'ALL'
+                OR (:metricName = 'TEMP' AND s.temperature IS NOT NULL)
+                OR (:metricName = 'HUMIDITY' AND s.humidity IS NOT NULL)
+                OR (:metricName = 'LIGHT' AND s.light IS NOT NULL)
+             )
            """)
     Page<SensorData> search(
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end,
+            @Param("metricName") String metricName,
             Pageable pageable
     );
 

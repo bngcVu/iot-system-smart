@@ -29,7 +29,9 @@ public class Device {
 
     @Enumerated(EnumType.STRING)
     @Column(length = 10, nullable = false)
-    private DeviceType type = DeviceType.LED;
+    private DeviceType type = DeviceType.LIGHT;
+
+    
 
     @Enumerated(EnumType.STRING)
     @Column(length = 10, nullable = false)
@@ -80,6 +82,8 @@ public class Device {
     public void setState(DeviceState state) {
         this.state = state;
     }
+
+    
 
     public LocalDateTime getLastSeenAt() {
         return lastSeenAt;

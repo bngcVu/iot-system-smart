@@ -71,7 +71,7 @@ class ActivityManager {
 
             const deviceValue = this.deviceFilter.value;
             if (deviceValue) {
-                params.append('deviceName', deviceValue);
+                params.append('deviceType', deviceValue);
             }
 
             const actionValue = this.actionFilter.value;

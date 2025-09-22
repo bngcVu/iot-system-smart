@@ -4,6 +4,7 @@ import com.iot_system.domain.dto.PagedResponse;
 import com.iot_system.domain.dto.SensorReadingDTO;
 import com.iot_system.domain.entity.Device;
 import com.iot_system.domain.entity.SensorData;
+import com.iot_system.domain.enums.SensorMetric;
 import com.iot_system.repository.SensorDataRepository;
 import com.iot_system.util.DateTimeUtils;
 import com.iot_system.util.ResponseUtils;
@@ -45,7 +46,7 @@ public class SensorDataService {
      * Tìm kiếm dữ liệu cảm biến theo ngày/giờ với nhiều định dạng, có phân trang
      * Hỗ trợ: HH:mm:ss dd/MM/yyyy, dd-MM-yyyy HH:mm:ss, dd-MM-yyyy HH:mm, ddMMyyyy, dd/MM/yyyy, ddMMyy
      */
-    public PagedResponse<SensorReadingDTO> search(String dateStr, int page, int size, String sort) {
+    public PagedResponse<SensorReadingDTO> search(String dateStr, SensorMetric metric, int page, int size, String sort) {
         LocalDateTime start = null;
         LocalDateTime end = null;
         String searchMessage = "";
@@ -73,7 +74,7 @@ public class SensorDataService {
         }
 
         // Dùng JPQL search(...) + Sort từ Pageable
-        Page<SensorData> sensorPage = sensorRepo.search(start, end, PageRequest.of(page, size,
+        Page<SensorData> sensorPage = sensorRepo.search(start, end, metric != null ? metric.name() : "ALL", PageRequest.of(page, size,
                 ("asc".equalsIgnoreCase(sort))
                         ? Sort.by("recordedAt").ascending()
                         : Sort.by("recordedAt").descending()
@@ -96,10 +97,10 @@ public class SensorDataService {
     /**
      * Lấy tất cả dữ liệu cảm biến (không filter) - cho trường hợp load initial data
      */
-    public PagedResponse<SensorReadingDTO> getAllData(int page, int size, String sort) {
+    public PagedResponse<SensorReadingDTO> getAllData(SensorMetric metric, int page, int size, String sort) {
         log.info("Getting all sensor data - page: {}, size: {}, sort: {}", page, size, sort);
         
-        Page<SensorData> sensorPage = sensorRepo.search(null, null, PageRequest.of(page, size,
+        Page<SensorData> sensorPage = sensorRepo.search(null, null, metric != null ? metric.name() : "ALL", PageRequest.of(page, size,
                 ("asc".equalsIgnoreCase(sort))
                         ? Sort.by("recordedAt").ascending()
                         : Sort.by("recordedAt").descending()

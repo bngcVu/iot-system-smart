@@ -4,6 +4,7 @@ import com.iot_system.domain.dto.ActionHistoryDTO;
 import com.iot_system.domain.dto.PagedResponse;
 import com.iot_system.domain.entity.DeviceActionHistory;
 import com.iot_system.domain.enums.DeviceState;
+import com.iot_system.domain.enums.DeviceType;
 import com.iot_system.repository.DeviceActionHistoryRepository;
 import com.iot_system.repository.DeviceRepository;
 import com.iot_system.util.DateTimeUtils;
@@ -45,7 +46,7 @@ public class ActionHistoryService {
      * Tìm kiếm lịch sử hoạt động theo ngày/giờ với nhiều định dạng, có phân trang
      * Hỗ trợ: dd-MM-yyyy HH:mm:ss, dd-MM-yyyy HH:mm, dd-MM-yyyy, ddMMyyyy, dd/MM/yyyy, ddMMyy
      */
-    public PagedResponse<ActionHistoryDTO> search(String dateStr, String deviceName, DeviceState action,
+    public PagedResponse<ActionHistoryDTO> search(String dateStr, String deviceName, DeviceType deviceType, DeviceState action,
                                                   int page, int size, String sort) {
         LocalDateTime start = null;
         LocalDateTime end = null;
@@ -79,7 +80,7 @@ public class ActionHistoryService {
                         : org.springframework.data.domain.Sort.by("executedAt").descending()
         );
         
-        Page<DeviceActionHistory> historyPage = historyRepo.search(deviceName, action, start, end, pageable);
+        Page<DeviceActionHistory> historyPage = historyRepo.search(deviceName, deviceType, action, start, end, pageable);
 
         int startIndex = page * size;
         return ResponseUtils.mapToPagedResponse(historyPage, page, size,

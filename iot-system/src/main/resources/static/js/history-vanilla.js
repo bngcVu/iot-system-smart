@@ -56,6 +56,8 @@ class VanillaSensorDataManager {
         document.getElementById('columnFilter').addEventListener('change', (e) => {
             this.currentFilter = e.target.value;
             this.applyColumnFilter();
+            this.currentPage = 0;
+            this.manualRefreshData();
         });
 
 
@@ -139,6 +141,10 @@ class VanillaSensorDataManager {
                 size: this.pageSize,
                 sort: this.currentSort
             });
+            const metric = this.mapFilterToMetric(this.currentFilter);
+            if (metric) {
+                params.append('metric', metric);
+            }
             
             if (this.currentSearch) {
                 params.append('date', this.currentSearch);
@@ -319,7 +325,8 @@ class VanillaSensorDataManager {
 
             console.log('Auto refreshing data...');
             this.isFromAutoRefresh = true; // Set flag for auto refresh
-            const response = await fetch(`/api/sensor-data?page=0&size=${this.pageSize}&sort=${this.currentSort}`);
+            const metric = this.mapFilterToMetric(this.currentFilter) || 'ALL';
+            const response = await fetch(`/api/sensor-data?page=0&size=${this.pageSize}&sort=${this.currentSort}&metric=${metric}`);
             const result = await response.json();
             
             if (result && result.data) {
@@ -430,6 +437,16 @@ class VanillaSensorDataManager {
                 if (cell) cell.style.display = '';
             });
         });
+    }
+
+    mapFilterToMetric(filter) {
+        switch (filter) {
+            case 'all': return 'ALL';
+            case 'temperature': return 'TEMP';
+            case 'humidity': return 'HUMIDITY';
+            case 'light': return 'LIGHT';
+            default: return 'ALL';
+        }
     }
 
     getVisibleColumnCount() {
