@@ -7,16 +7,10 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseBody;
 
-@ControllerAdvice
+@ControllerAdvice(basePackages = "com.iot_system")
 public class GlobalExceptionHandler {
 
-    // Bắt tất cả Exception chung
-    @ExceptionHandler(Exception.class)
-    @ResponseBody
-    public ResponseEntity<Object> handleException(Exception ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ErrorResponse("INTERNAL_ERROR", "Đã xảy ra lỗi hệ thống", ex.getMessage()));
-    }
+    
 
     // Bắt lỗi validate request
     @ExceptionHandler(MethodArgumentNotValidException.class)

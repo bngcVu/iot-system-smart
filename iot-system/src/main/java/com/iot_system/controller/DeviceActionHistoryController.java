@@ -7,6 +7,7 @@ import com.iot_system.domain.dto.PagedResponse;
 import com.iot_system.domain.enums.DeviceState;
 import com.iot_system.domain.enums.DeviceType;
 import com.iot_system.service.ActionHistoryService;
+ 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
@@ -32,5 +33,4 @@ public class DeviceActionHistoryController {
     ) {
         return actionHistoryService.search(dateStr, deviceName, deviceType, action, page, size, sort);
     }
-
 }

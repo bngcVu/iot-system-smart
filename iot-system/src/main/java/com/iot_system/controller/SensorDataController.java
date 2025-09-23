@@ -4,6 +4,7 @@ import com.iot_system.domain.dto.PagedResponse;
 import com.iot_system.domain.dto.SensorReadingDTO;
 import com.iot_system.domain.enums.SensorMetric;
 import com.iot_system.service.SensorDataService;
+ 
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -16,10 +17,6 @@ public class SensorDataController {
         this.sensorDataService = sensorDataService;
     }
 
-    /**
-     * API tìm kiếm theo ngày/giờ (có phân trang)
-     * Hỗ trợ: dd-MM-yyyy HH:mm:ss, dd-MM-yyyy, ddMMyyyy, dd-MM-yyyy HH:mm
-     */
     @GetMapping("/search")
     public PagedResponse<SensorReadingDTO> search(
             @RequestParam(required = false) String date,
@@ -31,9 +28,6 @@ public class SensorDataController {
         return sensorDataService.search(date, metric, page, size, sort);
     }
 
-    /**
-     * API mặc định: lấy tất cả hoặc theo 1 ngày (có phân trang)
-     */
     @GetMapping
     public PagedResponse<SensorReadingDTO> getAll(
             @RequestParam(required = false) String dateStr,
@@ -42,12 +36,9 @@ public class SensorDataController {
             @RequestParam(defaultValue = "15") int size,
             @RequestParam(defaultValue = "desc") String sort
     ) {
-        // Nếu không có dateStr, sử dụng getAllData để tối ưu performance
         if (dateStr == null || dateStr.trim().isEmpty()) {
             return sensorDataService.getAllData(metric, page, size, sort);
         }
         return sensorDataService.search(dateStr, metric, page, size, sort);
     }
-
-
 }

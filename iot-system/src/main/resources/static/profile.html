@@ -4,8 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>IOT System - Hồ sơ</title>
-  <link rel="icon" type="image/png" href="img/iot.png" />
-
   <link rel="stylesheet" href="css/common.css"/>
   <link rel="stylesheet" href="css/profile.css"/>
   <link rel="icon" type="image/png" href="img/iot.png"/>
@@ -57,7 +55,7 @@
           <label>Họ và tên</label>
           <div style="position:relative;">
             <i class="fa-solid fa-user" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#6b7280;"></i>
-            <input type="text" value="Bùi Ngọc Vũ" readonly style="padding-left:34px;"/>
+            <input type="text" data-profile="fullname" value="Bùi Ngọc Vũ" style="padding-left:34px;"/>
           </div>
         </div>
         <div class="field">
@@ -72,7 +70,7 @@
           <label>Mã sinh viên</label>
           <div style="position:relative;">
             <i class="fa-regular fa-id-card" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#6b7280;"></i>
-            <input type="text" value="B22DCCN910" readonly style="padding-left:34px;"/>
+            <input type="text" data-profile="studentId" value="B22DCCN910" style="padding-left:34px;"/>
           </div>
         </div>
         <div class="field">
@@ -103,12 +101,25 @@
             <button class="btn btn-secondary thread-open-btn" data-target="figmaLink" title="Mở thread"><i class="fa-solid fa-up-right-from-square"></i></button>
           </div>
         </div>
+
+        <div class="field">
+          <label>API Docs</label>
+          <div class="input-row" style="gap:0.5rem; align-items:center;">
+            <div style="position:relative;flex:1;">
+              <i class="fa-solid fa-book" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#6b7280;"></i>
+              <input id="apiDocsLink" class="thread-opener" type="text" value="/swagger-ui.html" readonly style="padding-left:34px; cursor:pointer;"/>
+            </div>
+            <button class="btn btn-secondary thread-open-btn" data-target="apiDocsLink" title="Mở thread"><i class="fa-solid fa-up-right-from-square"></i></button>
+          </div>
+        </div>
+        
         
 
       </div>
     </section>
 
     
+
 
   </main>
 </div>
