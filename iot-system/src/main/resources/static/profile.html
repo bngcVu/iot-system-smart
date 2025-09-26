@@ -13,6 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script defer src="js/profile.js"></script>
 </head>
 <body class="profile-page">
@@ -112,9 +113,17 @@
             <button class="btn btn-secondary thread-open-btn" data-target="apiDocsLink" title="Mở thread"><i class="fa-solid fa-up-right-from-square"></i></button>
           </div>
         </div>
-        
-        
 
+        <div class="field">
+          <label>PDF</label>
+          <div class="input-row" style="gap:0.5rem; align-items:center;">
+            <div style="position:relative;flex:1;">
+              <i class="fa-solid fa-file-pdf" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#6b7280;"></i>
+              <input id="pdfReportLink" class="thread-opener" type="text" value="B22DCCN910.pdf" readonly style="padding-left:34px; cursor:pointer;"/>
+            </div>
+            <button class="btn btn-secondary thread-open-btn" data-target="pdfReportLink" title="Mở PDF"><i class="fa-solid fa-up-right-from-square"></i></button>
+          </div>
+        </div>
       </div>
     </section>
 

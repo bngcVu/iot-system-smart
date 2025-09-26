@@ -17,7 +17,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 @Service
 public class SensorDataService {
@@ -94,9 +93,7 @@ public class SensorDataService {
 
 
 
-    /**
-     * Lấy tất cả dữ liệu cảm biến (không filter) - cho trường hợp load initial data
-     */
+    // Lấy tất cả dữ liệu cảm biến, có phân trang
     public PagedResponse<SensorReadingDTO> getAllData(SensorMetric metric, int page, int size, String sort) {
         log.info("Getting all sensor data - page: {}, size: {}, sort: {}", page, size, sort);
         

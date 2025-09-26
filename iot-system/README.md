@@ -14,6 +14,8 @@ Dự án IoT System là một hệ thống quản lý thiết bị thông minh �
 
 ## 🏗️ Kiến trúc tổng quan
 
+> Tài liệu chi tiết về kiến trúc Backend (kèm sơ đồ Mermaid) nằm tại: `docs/BE_ARCHITECTURE.md`.
+
 ### Backend (Spring Boot)
 - **Framework**: Spring Boot 3.5.5 với Java 21
 - **Database**: MySQL với JPA/Hibernate
