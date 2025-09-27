@@ -13,10 +13,14 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.data.jpa.domain.Specification;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
+import com.iot_system.util.ValueRange;
+import com.iot_system.util.ValueFilterParser;
+import jakarta.persistence.criteria.Predicate;
 
 @Service
 public class SensorDataService {
@@ -89,6 +93,92 @@ public class SensorDataService {
                     return SensorReadingDTO.from(data, startIndex + index + 1);
                 },
                 "Không tìm thấy dữ liệu cảm biến.");
+    }
+
+    public PagedResponse<SensorReadingDTO> searchByValue(String dateStr,
+                                                         SensorMetric metric,
+                                                         String valueOp,
+                                                         Double value,
+                                                         Double valueTo,
+                                                         Double tolerance,
+                                                         int page,
+                                                         int size,
+                                                         String sort) {
+        LocalDateTime start = null;
+        LocalDateTime end = null;
+        if (dateStr != null && !dateStr.isBlank()) {
+            DateTimeUtils.DateTimeParseResult parseResult = DateTimeUtils.parseDateTime(dateStr);
+            if (parseResult == null) {
+                throw new InvalidDateFormatException("Hỗ trợ: dd-MM-yyyy HH:mm:ss, dd-MM-yyyy HH:mm, dd-MM-yyyy, ddMMyyyy, dd/MM/yyyy, ddMMyy");
+            }
+            start = parseResult.getStart();
+            end = parseResult.getEnd();
+        }
+
+        ValueRange range = ValueFilterParser.toRange(valueOp, value, valueTo, tolerance, metric);
+
+        final LocalDateTime startTime = start;
+        final LocalDateTime endTime = end;
+        final SensorMetric metricFinal = metric;
+        final ValueRange valueRange = range;
+
+        Specification<SensorData> spec = (root, query, cb) -> {
+            Predicate predicate = cb.conjunction();
+            if (startTime != null) {
+                predicate = cb.and(predicate, cb.greaterThanOrEqualTo(root.get("recordedAt"), startTime));
+            }
+            if (endTime != null) {
+                predicate = cb.and(predicate, cb.lessThan(root.get("recordedAt"), endTime));
+            }
+            if (metricFinal != null && metricFinal != SensorMetric.ALL) {
+                String field = resolveField(metricFinal);
+                if (valueRange != null) {
+                    Double from = valueRange.getFrom();
+                    Double to = valueRange.getTo();
+                    if (from != null && !from.isInfinite()) {
+                        if (valueRange.isIncludeFrom()) {
+                            predicate = cb.and(predicate, cb.greaterThanOrEqualTo(root.get(field), from));
+                        } else {
+                            predicate = cb.and(predicate, cb.greaterThan(root.get(field), from));
+                        }
+                    }
+                    if (to != null && !to.isInfinite()) {
+                        if (valueRange.isIncludeTo()) {
+                            predicate = cb.and(predicate, cb.lessThanOrEqualTo(root.get(field), to));
+                        } else {
+                            predicate = cb.and(predicate, cb.lessThan(root.get(field), to));
+                        }
+                    }
+                } else {
+                    predicate = cb.and(predicate, cb.isNotNull(root.get(field)));
+                }
+            }
+            return predicate;
+        };
+
+        Page<SensorData> sensorPage = sensorRepo.findAll(spec, PageRequest.of(page, size,
+                ("asc".equalsIgnoreCase(sort))
+                        ? Sort.by("recordedAt").ascending()
+                        : Sort.by("recordedAt").descending()
+        ));
+
+        int startIndex = page * size;
+        return ResponseUtils.mapToPagedResponse(sensorPage, page, size,
+                "Tìm theo giá trị thành công",
+                data -> {
+                    int index = sensorPage.getContent().indexOf(data);
+                    return SensorReadingDTO.from(data, startIndex + index + 1);
+                },
+                "Không tìm thấy dữ liệu cảm biến.");
+    }
+
+    private String resolveField(SensorMetric metric) {
+        switch (metric) {
+            case TEMP: return "temperature";
+            case HUMIDITY: return "humidity";
+            case LIGHT: return "light";
+            default: return null;
+        }
     }
 
 

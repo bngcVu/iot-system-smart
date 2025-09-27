@@ -61,7 +61,6 @@ class ActivityManager {
         this.showLoading();
         
         try {
-            await new Promise(resolve => setTimeout(resolve, 800));
             const data = await fetchActionsPage({
                 page: this.currentPage,
                 size: this.pageSize,
@@ -93,51 +92,43 @@ class ActivityManager {
     }
 
     handleDataResponse(data) {
-        this.currentData = data.data || [];
+        const nextData = Array.isArray(data.data) ? data.data : [];
+        const isSame = this.isSameData(this.currentData, nextData);
+        this.currentData = nextData;
         this.totalElements = data.totalElements || 0;
         this.totalPages = data.totalPages || 0;
-        
-        
-        
         this.updatePaginationInfo();
-        this.renderTable();
+        if (!isSame) this.renderTable();
         this.updatePaginationButtons();
-        
-        // No need for alignment fix with history table CSS
+    }
+
+    isSameData(prev, next) {
+        if (!Array.isArray(prev) || !Array.isArray(next)) return false;
+        if (prev.length !== next.length) return false;
+        for (let i = 0; i < next.length; i++) {
+            const a = prev[i] || {};
+            const b = next[i] || {};
+            if (a.deviceName !== b.deviceName) return false;
+            if (a.action !== b.action) return false;
+            if (a.executedAt !== b.executedAt) return false;
+        }
+        return true;
     }
 
     renderTable() {
-        this.tbody.innerHTML = '';
-        
         if (this.currentData.length === 0) {
             this.renderEmptyTable();
             return;
         }
 
-        this.currentData.forEach((item, index) => {
-            const row = this.createTableRow(item, index);
-            this.tbody.appendChild(row);
-        });
-        
-        // Smooth animation for table rows
-        this.animateTableRows();
+        const frag = document.createDocumentFragment();
+        for (let i = 0; i < this.currentData.length; i++) {
+            frag.appendChild(this.createTableRow(this.currentData[i], i));
+        }
+        this.tbody.replaceChildren(frag);
     }
 
-    animateTableRows() {
-        const rows = document.querySelectorAll('#activityDataTable tbody tr');
-        
-        // Set initial state
-        gsap.set(rows, { opacity: 0, y: 30 });
-        
-        // Animate rows with stagger effect
-        gsap.to(rows, {
-            opacity: 1,
-            y: 0,
-            duration: 0.6,
-            stagger: 0.08,
-            ease: "power2.out"
-        });
-    }
+    
 
     createTableRow(item, index) {
         const row = document.createElement('tr');
@@ -399,65 +390,11 @@ class ActivityManager {
         this.loadData();
     }
 
-    showLoading() {
-        this.searchBtn.classList.add('loading');
-        this.searchBtn.querySelector('.btn-text').style.display = 'none';
-        this.searchBtn.querySelector('.btn-loading').style.display = 'inline';
-        
-        // Clear table body
-        this.tbody.innerHTML = '';
-        
-        // Show SweetAlert2 loading for 2 seconds only
-        Swal.fire({
-            title: 'Đang tải dữ liệu...',
-            text: 'Vui lòng chờ trong giây lát',
-            allowOutsideClick: false,
-            allowEscapeKey: false,
-            showConfirmButton: false,
-            timer: 800, // Auto close after 2 seconds
-            timerProgressBar: true,
-            didOpen: () => {
-                Swal.showLoading();
-            }
-        });
-    }
+    showLoading() {}
 
-    hideLoading() {
-        this.searchBtn.classList.remove('loading');
-        this.searchBtn.querySelector('.btn-text').style.display = 'inline';
-        this.searchBtn.querySelector('.btn-loading').style.display = 'none';
-        
-        // Close SweetAlert2 loading
-        Swal.close();
-    }
+    hideLoading() {}
 
-    showToast(message, type = 'info') {
-        // Map type to SweetAlert2 icon
-        const iconMap = {
-            'success': 'success',
-            'error': 'error',
-            'warning': 'warning',
-            'info': 'info'
-        };
-        
-        // Show SweetAlert2 toast
-        const Toast = Swal.mixin({
-            toast: true,
-            position: 'top-end',
-            showConfirmButton: false,
-            timer: 3000,
-            timerProgressBar: true,
-            didOpen: (toast) => {
-                toast.addEventListener('mouseenter', Swal.stopTimer);
-                toast.addEventListener('mouseleave', Swal.resumeTimer);
-            }
-        });
-        
-        Toast.fire({
-            icon: iconMap[type] || 'info',
-            title: message
-        });
-    }
+    showToast(message, type = 'info') {}
 }
 
 document.addEventListener('DOMContentLoaded', () => {

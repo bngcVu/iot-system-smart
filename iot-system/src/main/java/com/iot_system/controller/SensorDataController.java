@@ -21,10 +21,17 @@ public class SensorDataController {
     public PagedResponse<SensorReadingDTO> search(
             @RequestParam(required = false) String date,
             @RequestParam(defaultValue = "ALL") SensorMetric metric,
+            @RequestParam(required = false) String valueOp,
+            @RequestParam(required = false) Double value,
+            @RequestParam(required = false) Double valueTo,
+            @RequestParam(required = false) Double tolerance,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "15") int size,
             @RequestParam(defaultValue = "desc") String sort
     ) {
+        if (valueOp != null && !valueOp.isBlank()) {
+            return sensorDataService.searchByValue(date, metric, valueOp, value, valueTo, tolerance, page, size, sort);
+        }
         return sensorDataService.search(date, metric, page, size, sort);
     }
 
@@ -32,10 +39,17 @@ public class SensorDataController {
     public PagedResponse<SensorReadingDTO> getAll(
             @RequestParam(required = false) String dateStr,
             @RequestParam(defaultValue = "ALL") SensorMetric metric,
+            @RequestParam(required = false) String valueOp,
+            @RequestParam(required = false) Double value,
+            @RequestParam(required = false) Double valueTo,
+            @RequestParam(required = false) Double tolerance,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "15") int size,
             @RequestParam(defaultValue = "desc") String sort
     ) {
+        if (valueOp != null && !valueOp.isBlank()) {
+            return sensorDataService.searchByValue(dateStr, metric, valueOp, value, valueTo, tolerance, page, size, sort);
+        }
         if (dateStr == null || dateStr.trim().isEmpty()) {
             return sensorDataService.getAllData(metric, page, size, sort);
         }

@@ -11,6 +11,10 @@ class VanillaSensorDataManager {
         this.currentSort = 'desc';
         this.currentSearch = '';
         this.currentFilter = 'all';
+        this.currentValueOp = '';
+        this.currentValue = '';
+        this.currentValueTo = '';
+        this.currentTolerance = '';
         this.isLoading = false;
         this.totalElements = 0;
         this.totalPages = 0;
@@ -71,6 +75,8 @@ class VanillaSensorDataManager {
             this.manualRefreshData();
         });
 
+        
+
 
         // Pagination controls
         document.getElementById('prevPage').addEventListener('click', () => {
@@ -115,11 +121,7 @@ class VanillaSensorDataManager {
                 },
                 onDisconnected: () => {
                     this.wsConnected = false;
-                    if (!this.pollTimerId) {
-                        this.pollTimerId = setInterval(() => {
-                            if (!this.isLoading) { this.refreshData(); }
-                        }, 6000);
-                    }
+                    if (this.pollTimerId) { clearInterval(this.pollTimerId); this.pollTimerId = null; }
                 },
                 onSensors: (payload) => {
                     this.lastWsMessageAt = Date.now();
@@ -134,12 +136,7 @@ class VanillaSensorDataManager {
     }
 
     startLiveMonitor() {
-        if (this._liveTimer) return;
-        this._liveTimer = setInterval(() => {
-            if (this.isLoading) return;
-            if (this.currentPage !== 0) return;
-            this.fetchData(true);
-        }, 6000);
+        return;
     }
 
     applyWsItem(item) {
@@ -181,26 +178,47 @@ class VanillaSensorDataManager {
     }
 
     async performSearch() {
-        const searchValue = document.getElementById('searchInput').value.trim();
-        
-        if (searchValue && !this.isValidDateFormat(searchValue)) {
+        const raw = document.getElementById('searchInput').value.trim();
+
+        let parsed = this.parseUnifiedQuery(raw);
+
+        if (parsed.type === 'invalid' || parsed.type === 'none') {
+            const metricEnum = this.mapFilterToMetric(this.currentFilter) || 'ALL';
+            const rangeMatch = raw.match(/^(\d+(?:[\.,]\d+)?)\s*[-–]\s*(\d+(?:[\.,]\d+)?)/);
+            const numMatch = raw.match(/^(\d+(?:[\.,]\d+)?)/);
+            if ((rangeMatch || numMatch) && metricEnum !== 'ALL') {
+                if (rangeMatch) {
+                    const from = parseFloat(rangeMatch[1].replace(',', '.'));
+                    const to = parseFloat(rangeMatch[2].replace(',', '.'));
+                    parsed = { type: 'value', metric: metricEnum, valueOp: 'between', value: from, valueTo: to };
+                } else if (numMatch) {
+                    const val = parseFloat(numMatch[1].replace(',', '.'));
+                    parsed = { type: 'value', metric: metricEnum, valueOp: 'eq', value: val };
+                }
+            }
+        }
+
+        if (parsed.type === 'invalid') {
             this.renderInvalidFormatMessage();
             this.updateTableInfo({ data: [], totalElements: 0, totalPages: 0, currentPage: 0 });
             this.setPaginationLoading(false);
             this.setPageSizeLoading(false);
             return;
         }
-        
-        // Only update state if validation passes
-        this.currentSearch = searchValue;
+
+        this.currentValueOp = parsed.valueOp || '';
+        this.currentValue = parsed.value !== undefined ? parsed.value : '';
+        this.currentValueTo = parsed.valueTo !== undefined ? parsed.valueTo : '';
+        this.currentTolerance = parsed.tolerance !== undefined ? parsed.tolerance : '';
+        this.currentSearch = parsed.date || '';
+        if (parsed.metric) this.currentFilter = this.reverseMapMetric(parsed.metric);
+
         this.currentPage = 0;
-        
-        // Reset lastUpdateTime when searching to prevent highlighting old data
         this.lastUpdateTime = null;
-        
+
         this.setButtonLoading(true);
         try {
-            this.isFromAutoRefresh = false; // Ensure this is not from auto refresh
+            this.isFromAutoRefresh = false;
             await this.fetchData();
         } catch (error) {
             console.error('Search error:', error);
@@ -217,15 +235,16 @@ class VanillaSensorDataManager {
         if (!silent) this.showTableLoading();
         
         try {
-            // Wait for 800ms to show loading effect
-            await new Promise(resolve => setTimeout(resolve, 800));
-            
             const result = await fetchSensorsPage({
                 page: this.currentPage,
                 size: this.pageSize,
                 sort: this.currentSort,
                 metric: this.mapFilterToMetric(this.currentFilter) || 'ALL',
-                date: this.currentSearch || ''
+                date: this.currentSearch || '',
+                valueOp: this.currentValueOp || '',
+                value: this.currentValue !== '' ? this.currentValue : '',
+                valueTo: this.currentValueTo !== '' ? this.currentValueTo : '',
+                tolerance: this.currentTolerance !== '' ? this.currentTolerance : ''
             });
             if (result && typeof result.message === 'string' && result.message.toLowerCase().includes('sai định dạng')) {
                 this.renderInvalidFormatMessage();
@@ -279,25 +298,17 @@ class VanillaSensorDataManager {
             this.showEmptyTable();
             return;
         }
-        let hasNewData = false;
         data.forEach((item) => {
             const row = document.createElement('tr');
-            const isNewData = this.isNewData(item);
-            if (isNewData) { row.classList.add('new-data-row'); hasNewData = true; }
             row.innerHTML = `
                 <td>${item.stt}</td>
-                <td>${this.formatSensorValue(item.temperature, 'temperature', isNewData)}</td>
-                <td>${this.formatSensorValue(item.humidity, 'humidity', isNewData)}</td>
-                <td>${this.formatSensorValue(item.light, 'light', isNewData)}</td>
+                <td>${this.formatSensorValue(item.temperature, 'temperature', false)}</td>
+                <td>${this.formatSensorValue(item.humidity, 'humidity', false)}</td>
+                <td>${this.formatSensorValue(item.light, 'light', false)}</td>
                 <td>${this.formatDateTime(item.recordedAt)}</td>
             `;
             tbody.appendChild(row);
         });
-        if (hasNewData && table) {
-            table.classList.add('has-new-data');
-            setTimeout(() => table.classList.remove('has-new-data'), 3000);
-        }
-        this.animateTableRows();
         try {
             const newest = data.reduce((maxTs, item) => {
                 const ts = new Date(item.recordedAt).getTime();
@@ -500,6 +511,15 @@ class VanillaSensorDataManager {
             case 'humidity': return 'HUMIDITY';
             case 'light': return 'LIGHT';
             default: return 'ALL';
+        }
+    }
+
+    reverseMapMetric(metric) {
+        switch (metric) {
+            case 'TEMP': return 'temperature';
+            case 'HUMIDITY': return 'humidity';
+            case 'LIGHT': return 'light';
+            default: return 'all';
         }
     }
 
@@ -724,23 +744,11 @@ class VanillaSensorDataManager {
         const tbody = document.querySelector('#sensorDataTable tbody');
         if (!tbody) return;
         tbody.innerHTML = '';
-        for (let i = 0; i < 5; i++) {
-            const skeletonRow = document.createElement('tr');
-            skeletonRow.className = 'skeleton-row';
-            skeletonRow.innerHTML = `
-                <td><div class="skeleton-cell"></div></td>
-                <td><div class="skeleton-cell"></div></td>
-                <td><div class="skeleton-cell"></div></td>
-                <td><div class="skeleton-cell"></div></td>
-                <td><div class="skeleton-cell"></div></td>
-            `;
-            tbody.appendChild(skeletonRow);
-        }
     }
 
 
     isValidDateFormat(input) {
-        if (!input || input.trim() === '') return true; // Empty input is valid
+        if (!input || input.trim() === '') return true;
         
         const trimmedInput = input.trim();
         
@@ -793,6 +801,61 @@ class VanillaSensorDataManager {
         } catch (error) {
             return false;
         }
+    }
+
+    parseUnifiedQuery(input) {
+        if (!input) return { type: 'none' };
+        const s = input.trim();
+
+        const opMap = { '>': 'gt', '>=': 'gte', '≥': 'gte', '<': 'lt', '<=': 'lte', '≤': 'lte', '=': 'eq' };
+
+        const tolMatch = s.match(/(~|±)\s*(\d+(?:[\.,]\d+)?)/);
+        const tol = tolMatch ? parseFloat(tolMatch[2].replace(',', '.')) : undefined;
+        const cleaned = s.replace(/(~|±)\s*\d+(?:[\.,]\d+)?/, '').trim();
+
+        const betweenMatch = cleaned.match(/^(temp|temperature|t|hum|humidity|h|light|lux|l)\s+(\d+(?:[\.,]\d+)?)\s*[-–]\s*(\d+(?:[\.,]\d+)?)/i);
+        if (betweenMatch) {
+            const metricKey = betweenMatch[1].toLowerCase();
+            const value = parseFloat(betweenMatch[2].replace(',', '.'));
+            const valueTo = parseFloat(betweenMatch[3].replace(',', '.'));
+            return { type: 'value', metric: this.metricKeyToEnum(metricKey), valueOp: 'between', value, valueTo };
+        }
+
+        const compMatch = cleaned.match(/^(temp|temperature|t|hum|humidity|h|light|lux|l)\s*(>=|≤|>|<|<=|≥|=)\s*(\d+(?:[\.,]\d+)?)/i);
+        if (compMatch) {
+            const metricKey = compMatch[1].toLowerCase();
+            const op = opMap[compMatch[2]] || 'eq';
+            const value = parseFloat(compMatch[3].replace(',', '.'));
+            return { type: 'value', metric: this.metricKeyToEnum(metricKey), valueOp: op, value, tolerance: op === 'eq' ? tol : undefined };
+        }
+
+        const eqMatch = cleaned.match(/^(temp|temperature|t|hum|humidity|h|light|lux|l)\s*=\s*(\d+(?:[\.,]\d+)?)/i);
+        if (eqMatch) {
+            const metricKey = eqMatch[1].toLowerCase();
+            const value = parseFloat(eqMatch[2].replace(',', '.'));
+            return { type: 'value', metric: this.metricKeyToEnum(metricKey), valueOp: 'eq', value, tolerance: tol };
+        }
+
+        const impliedEq = cleaned.match(/^(temp|temperature|t|hum|humidity|h|light|lux|l)\s+(\d+(?:[\.,]\d+)?)/i);
+        if (impliedEq) {
+            const metricKey = impliedEq[1].toLowerCase();
+            const value = parseFloat(impliedEq[2].replace(',', '.'));
+            return { type: 'value', metric: this.metricKeyToEnum(metricKey), valueOp: 'eq', value, tolerance: tol };
+        }
+
+        if (this.isValidDateFormat(cleaned)) {
+            return { type: 'date', date: cleaned };
+        }
+
+        return { type: 'invalid' };
+    }
+
+    metricKeyToEnum(key) {
+        const k = key.toLowerCase();
+        if (['temp', 'temperature', 't'].includes(k)) return 'TEMP';
+        if (['hum', 'humidity', 'h'].includes(k)) return 'HUMIDITY';
+        if (['light', 'lux', 'l'].includes(k)) return 'LIGHT';
+        return 'ALL';
     }
 
     showToast(message, type = 'info') {
