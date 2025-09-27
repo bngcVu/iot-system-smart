@@ -256,8 +256,12 @@ async function loadDevices() {
       if (toggle) {
         toggle.checked = d.state === 'ON';
         toggle.onchange = async (e) => {
-          const action = e.target.checked ? 'ON' : 'OFF';
+          const currentState = e.target.checked;
+          const action = currentState ? 'ON' : 'OFF';
           const sentAt = performance.now();
+          
+          // Rollback toggle ngay lập tức - không thay đổi UI cho đến khi có ACK
+          e.target.checked = !currentState;
           
           // GSAP toggle animation
           gsap.to(e.target.closest('.card'), {
@@ -268,7 +272,7 @@ async function loadDevices() {
             ease: "power2.inOut"
           });
           
-          // Optimistic: disable toggle until ACK or timeout
+          // Pessimistic: disable toggle và chờ ACK từ hardware
           toggle.disabled = true;
           try {
             const resp = await sendDeviceCommand(d.id, action);
@@ -282,11 +286,10 @@ async function loadDevices() {
               try {
                 const pend = pendingMap.get(d.id);
                 if (!pend) return;
-                // rollback UI
-                const t = document.getElementById(`led${idx}-toggle`);
-                if (t) t.checked = !e.target.checked;
+                // Timeout: enable toggle và giữ nguyên trạng thái hiện tại
                 toggle.disabled = false;
                 pendingMap.delete(d.id);
+                console.log(`Device ${d.id} command timeout - no ACK received`);
               } catch {}
             }, 2000);
             pendingMap.set(d.id, { correlationId, desired: action, timer, toggleIndex: idx });
@@ -299,8 +302,7 @@ async function loadDevices() {
               yoyo: true,
               repeat: 2
             });
-            // Khôi phục trạng thái toggle khi có lỗi
-            e.target.checked = !e.target.checked;
+            // Lỗi: enable toggle và giữ nguyên trạng thái hiện tại
             toggle.disabled = false;
           }
         };
