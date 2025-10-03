@@ -44,6 +44,32 @@ class VanillaSensorDataManager {
             this.performSearch();
         });
 
+        // Refresh button (reload page)
+        const refreshBtn = document.getElementById('refreshBtn');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                console.log('[History] Refresh button clicked');
+                try {
+                    // Thêm param để tránh cache
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('r', Date.now());
+                    // Nếu giữ phím Shift thì chỉ refresh dữ liệu bảng thay vì reload toàn trang
+                    if (e.shiftKey) {
+                        this.currentPage = 0;
+                        this.lastUpdateTime = null;
+                        this.manualRefreshData();
+                        this.showToast('Đã làm mới dữ liệu');
+                        return;
+                    }
+                    window.location.href = url.pathname + '?' + url.searchParams.toString();
+                } catch (err) {
+                    console.warn('Fallback reload', err);
+                    window.location.reload();
+                }
+            });
+        }
+
         // Enter key in search input
         document.getElementById('searchInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {

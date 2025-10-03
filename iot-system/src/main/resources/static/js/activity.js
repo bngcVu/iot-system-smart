@@ -32,6 +32,7 @@ class ActivityManager {
         this.pageNumbers = document.getElementById('pageNumbersBottom');
         this.toast = document.getElementById('toast');
         this.csvBtn = document.getElementById('btn-export-csv-activity');
+        this.refreshBtn = document.getElementById('refreshActivityBtn');
     }
 
     bindEvents() {
@@ -50,6 +51,25 @@ class ActivityManager {
         
         if (this.csvBtn) {
             this.csvBtn.addEventListener('click', () => this.exportCSV());
+        }
+        if (this.refreshBtn) {
+            this.refreshBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                // Shift+Click chỉ làm mới dữ liệu bảng
+                if (e.shiftKey) {
+                    this.currentPage = 0;
+                    this.loadData();
+                    this.showToast && this.showToast('Đã làm mới dữ liệu');
+                    return;
+                }
+                try {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('r', Date.now());
+                    window.location.href = url.pathname + '?' + url.searchParams.toString();
+                } catch (err) {
+                    window.location.reload();
+                }
+            });
         }
         
     }
