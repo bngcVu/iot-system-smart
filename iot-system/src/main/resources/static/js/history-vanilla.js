@@ -13,7 +13,7 @@ class VanillaSensorDataManager {
         this.currentFilter = 'all';
         this.currentValueOp = '';
         this.currentValue = '';
-        this.currentValueTo = '';
+    // this.currentValueTo removed (bỏ tìm trong khoảng)
         this.currentTolerance = '';
         this.isLoading = false;
         this.totalElements = 0;
@@ -208,36 +208,68 @@ class VanillaSensorDataManager {
 
         let parsed = this.parseUnifiedQuery(raw);
 
-        if (parsed.type === 'invalid' || parsed.type === 'none') {
-            const metricEnum = this.mapFilterToMetric(this.currentFilter) || 'ALL';
-            const rangeMatch = raw.match(/^(\d+(?:[\.,]\d+)?)\s*[-–]\s*(\d+(?:[\.,]\d+)?)/);
-            const numMatch = raw.match(/^(\d+(?:[\.,]\d+)?)/);
-            if ((rangeMatch || numMatch) && metricEnum !== 'ALL') {
-                if (rangeMatch) {
-                    const from = parseFloat(rangeMatch[1].replace(',', '.'));
-                    const to = parseFloat(rangeMatch[2].replace(',', '.'));
-                    parsed = { type: 'value', metric: metricEnum, valueOp: 'between', value: from, valueTo: to };
-                } else if (numMatch) {
-                    const val = parseFloat(numMatch[1].replace(',', '.'));
+        // Loại bỏ tìm khoảng (range) vẫn giữ invalid nếu nhập "x - y"
+        const rangePattern = /^(\d+(?:[\.,]\d+)?)\s*[-–]\s*(\d+(?:[\.,]\d+)?)/;
+        if (rangePattern.test(raw)) parsed = { type: 'invalid' };
+
+        // Nếu đang ở ALL và chỉ nhập một số -> tìm trên ALL (OR ở backend)
+        if ((parsed.type === 'invalid' || parsed.type === 'none') && this.currentFilter === 'all') {
+            const numSolo = raw.match(/^(\d+(?:[\.,]\d+)?)/);
+            if (numSolo) {
+                const val = parseFloat(numSolo[1].replace(',', '.'));
+                parsed = { type: 'value', metric: 'ALL', valueOp: 'eq', value: val };
+            }
+        }
+
+        // Nếu không phải ALL nhưng parse invalid mà người dùng nhập số đơn → coi là eq cho sensor đã chọn
+        if ((parsed.type === 'invalid' || parsed.type === 'none') && this.currentFilter !== 'all') {
+            const numSolo = raw.match(/^(\d+(?:[\.,]\d+)?)/);
+            if (numSolo) {
+                const val = parseFloat(numSolo[1].replace(',', '.'));
+                const metricEnum = this.mapFilterToMetric(this.currentFilter) || 'ALL';
+                if (metricEnum !== 'ALL') {
                     parsed = { type: 'value', metric: metricEnum, valueOp: 'eq', value: val };
                 }
             }
         }
 
         if (parsed.type === 'invalid') {
-            this.renderInvalidFormatMessage();
-            this.updateTableInfo({ data: [], totalElements: 0, totalPages: 0, currentPage: 0 });
-            this.setPaginationLoading(false);
-            this.setPageSizeLoading(false);
-            return;
+            // Nếu user chỉ nhập 1 số (ví dụ 27.2) nhưng parseUnifiedQuery chưa nhận diện => coi là giá trị cho TEMP khi đang ALL
+            const numericSolo = raw.match(/^(\d+(?:[\.,]\d+)?)/);
+            if (numericSolo) {
+                const val = parseFloat(numericSolo[1].replace(',', '.'));
+                parsed = { type: 'value', metric: 'TEMP', valueOp: 'eq', value: val };
+                this.currentFilter = 'temperature';
+                const filterSelect = document.getElementById('columnFilter');
+                if (filterSelect) filterSelect.value = 'temperature';
+            } else {
+                this.renderInvalidFormatMessage();
+                this.updateTableInfo({ data: [], totalElements: 0, totalPages: 0, currentPage: 0 });
+                this.setPaginationLoading(false);
+                this.setPageSizeLoading(false);
+                return;
+            }
         }
 
         this.currentValueOp = parsed.valueOp || '';
         this.currentValue = parsed.value !== undefined ? parsed.value : '';
-        this.currentValueTo = parsed.valueTo !== undefined ? parsed.valueTo : '';
-        this.currentTolerance = parsed.tolerance !== undefined ? parsed.tolerance : '';
+    // Bỏ valueTo (không hỗ trợ khoảng)
+    this.currentTolerance = ''; // bỏ tolerance
         this.currentSearch = parsed.date || '';
-        if (parsed.metric) this.currentFilter = this.reverseMapMetric(parsed.metric);
+        if (parsed.metric && parsed.metric !== 'ALL') {
+            // Chỉ đồng bộ UI nếu metric cụ thể (không đổi sang sensor khi ALL search)
+            this.currentFilter = this.reverseMapMetric(parsed.metric);
+            const filterSelect = document.getElementById('columnFilter');
+            if (filterSelect) filterSelect.value = this.currentFilter;
+        }
+
+        // Giữ nguyên filter = 'all' khi tìm kiếm ALL
+
+        // Heuristic kiểm tra phạm vi hợp lý và tự động chuyển metric nếu người dùng chọn nhầm
+        // Bỏ heuristic tự động chuyển cảm biến khi giá trị vượt phạm vi
+
+        // Thêm tolerance mặc định nếu người dùng so sánh bằng (eq) để tránh lệch số thực
+        // Bỏ tự động thêm tolerance – so sánh tuyệt đối
 
         this.currentPage = 0;
         this.lastUpdateTime = null;
@@ -269,8 +301,8 @@ class VanillaSensorDataManager {
                 date: this.currentSearch || '',
                 valueOp: this.currentValueOp || '',
                 value: this.currentValue !== '' ? this.currentValue : '',
-                valueTo: this.currentValueTo !== '' ? this.currentValueTo : '',
-                tolerance: this.currentTolerance !== '' ? this.currentTolerance : ''
+                // valueTo removed
+                // Không gửi tolerance nữa
             });
             if (result && typeof result.message === 'string' && result.message.toLowerCase().includes('sai định dạng')) {
                 this.renderInvalidFormatMessage();
@@ -489,44 +521,14 @@ class VanillaSensorDataManager {
     }
 
     applyColumnFilter() {
+        // Yêu cầu mới: luôn hiển thị tất cả các cột, không ẩn cột khi chọn cảm biến hay nhập giá trị.
         const table = document.getElementById('sensorDataTable');
+        if (!table) return;
         const headers = table.querySelectorAll('thead th');
         const rows = table.querySelectorAll('tbody tr');
-        
-        // Hide all sensor columns first
-        [1, 2, 3].forEach(colIndex => {
-            headers[colIndex].style.display = 'none';
-            rows.forEach(row => {
-                const cell = row.cells[colIndex];
-                if (cell) cell.style.display = 'none';
-            });
-        });
-        
-        // Show columns based on filter
-        let visibleColumns = [0, 4]; // STT and Time always visible
-        
-        switch (this.currentFilter) {
-            case 'all':
-                visibleColumns = [0, 1, 2, 3, 4];
-                break;
-            case 'temperature':
-                visibleColumns = [0, 1, 4];
-                break;
-            case 'humidity':
-                visibleColumns = [0, 2, 4];
-                break;
-            case 'light':
-                visibleColumns = [0, 3, 4];
-                break;
-        }
-        
-        // Show selected columns
-        visibleColumns.forEach(colIndex => {
-            headers[colIndex].style.display = '';
-            rows.forEach(row => {
-                const cell = row.cells[colIndex];
-                if (cell) cell.style.display = '';
-            });
+        headers.forEach(h => { h.style.display = ''; });
+        rows.forEach(r => {
+            Array.from(r.cells).forEach(c => { c.style.display = ''; });
         });
     }
 
@@ -835,38 +837,32 @@ class VanillaSensorDataManager {
 
         const opMap = { '>': 'gt', '>=': 'gte', '≥': 'gte', '<': 'lt', '<=': 'lte', '≤': 'lte', '=': 'eq' };
 
-        const tolMatch = s.match(/(~|±)\s*(\d+(?:[\.,]\d+)?)/);
-        const tol = tolMatch ? parseFloat(tolMatch[2].replace(',', '.')) : undefined;
-        const cleaned = s.replace(/(~|±)\s*\d+(?:[\.,]\d+)?/, '').trim();
+    // Bỏ hỗ trợ ký hiệu tolerance (~ hoặc ±)
+    const cleaned = s.replace(/(~|±)\s*\d+(?:[\.,]\d+)?/, '').trim();
 
-        const betweenMatch = cleaned.match(/^(temp|temperature|t|hum|humidity|h|light|lux|l)\s+(\d+(?:[\.,]\d+)?)\s*[-–]\s*(\d+(?:[\.,]\d+)?)/i);
-        if (betweenMatch) {
-            const metricKey = betweenMatch[1].toLowerCase();
-            const value = parseFloat(betweenMatch[2].replace(',', '.'));
-            const valueTo = parseFloat(betweenMatch[3].replace(',', '.'));
-            return { type: 'value', metric: this.metricKeyToEnum(metricKey), valueOp: 'between', value, valueTo };
-        }
+        // Bỏ hỗ trợ cú pháp khoảng (between)
 
-        const compMatch = cleaned.match(/^(temp|temperature|t|hum|humidity|h|light|lux|l)\s*(>=|≤|>|<|<=|≥|=)\s*(\d+(?:[\.,]\d+)?)/i);
-        if (compMatch) {
-            const metricKey = compMatch[1].toLowerCase();
-            const op = opMap[compMatch[2]] || 'eq';
-            const value = parseFloat(compMatch[3].replace(',', '.'));
-            return { type: 'value', metric: this.metricKeyToEnum(metricKey), valueOp: op, value, tolerance: op === 'eq' ? tol : undefined };
+        // Chỉ hỗ trợ dạng metric = value hoặc metric value (eq tuyệt đối). Các toán tử khác bị coi là invalid.
+        const eqPattern = /^(temp|temperature|t|hum|humidity|h|light|lux|l)\s*=\s*(\d+(?:[\.,]\d+)?)/i;
+        const eqMatchStrict = cleaned.match(eqPattern);
+        if (eqMatchStrict) {
+            const metricKey = eqMatchStrict[1].toLowerCase();
+            const value = parseFloat(eqMatchStrict[2].replace(',', '.'));
+            return { type: 'value', metric: this.metricKeyToEnum(metricKey), valueOp: 'eq', value };
         }
 
         const eqMatch = cleaned.match(/^(temp|temperature|t|hum|humidity|h|light|lux|l)\s*=\s*(\d+(?:[\.,]\d+)?)/i);
         if (eqMatch) {
             const metricKey = eqMatch[1].toLowerCase();
             const value = parseFloat(eqMatch[2].replace(',', '.'));
-            return { type: 'value', metric: this.metricKeyToEnum(metricKey), valueOp: 'eq', value, tolerance: tol };
+            return { type: 'value', metric: this.metricKeyToEnum(metricKey), valueOp: 'eq', value };
         }
 
         const impliedEq = cleaned.match(/^(temp|temperature|t|hum|humidity|h|light|lux|l)\s+(\d+(?:[\.,]\d+)?)/i);
         if (impliedEq) {
             const metricKey = impliedEq[1].toLowerCase();
             const value = parseFloat(impliedEq[2].replace(',', '.'));
-            return { type: 'value', metric: this.metricKeyToEnum(metricKey), valueOp: 'eq', value, tolerance: tol };
+            return { type: 'value', metric: this.metricKeyToEnum(metricKey), valueOp: 'eq', value };
         }
 
         if (this.isValidDateFormat(cleaned)) {

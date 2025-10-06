@@ -17,42 +17,28 @@ public class SensorDataController {
         this.sensorDataService = sensorDataService;
     }
 
-    @GetMapping("/search")
-    public PagedResponse<SensorReadingDTO> search(
-            @RequestParam(required = false) String date,
-            @RequestParam(defaultValue = "ALL") SensorMetric metric,
-            @RequestParam(required = false) String valueOp,
-            @RequestParam(required = false) Double value,
-            @RequestParam(required = false) Double valueTo,
-            @RequestParam(required = false) Double tolerance,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "15") int size,
-            @RequestParam(defaultValue = "desc") String sort
-    ) {
-        if (valueOp != null && !valueOp.isBlank()) {
-            return sensorDataService.searchByValue(date, metric, valueOp, value, valueTo, tolerance, page, size, sort);
-        }
-        return sensorDataService.search(date, metric, page, size, sort);
-    }
-
+    // Một phương thức GET duy nhất tại path gốc "/api/sensor-data"
     @GetMapping
-    public PagedResponse<SensorReadingDTO> getAll(
-            @RequestParam(required = false) String dateStr,
+    public PagedResponse<SensorReadingDTO> search(
+            @RequestParam(name = "dateStr", required = false) String dateStr,
             @RequestParam(defaultValue = "ALL") SensorMetric metric,
             @RequestParam(required = false) String valueOp,
             @RequestParam(required = false) Double value,
-            @RequestParam(required = false) Double valueTo,
-            @RequestParam(required = false) Double tolerance,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "15") int size,
             @RequestParam(defaultValue = "desc") String sort
     ) {
+        String dateQuery = (dateStr != null && !dateStr.isBlank()) ? dateStr : null;
+
+        // Nếu truyền valueOp (không rỗng) => vào luồng tìm theo giá trị
         if (valueOp != null && !valueOp.isBlank()) {
-            return sensorDataService.searchByValue(dateStr, metric, valueOp, value, valueTo, tolerance, page, size, sort);
+            return sensorDataService.searchByValue(dateQuery, metric, valueOp, value, page, size, sort);
         }
-        if (dateStr == null || dateStr.trim().isEmpty()) {
+
+        // Không có valueOp: nếu có ngày => tìm theo thời gian; nếu không => trả tất cả (có thể lọc metric)
+        if (dateQuery == null || dateQuery.trim().isEmpty()) {
             return sensorDataService.getAllData(metric, page, size, sort);
         }
-        return sensorDataService.search(dateStr, metric, page, size, sort);
+        return sensorDataService.search(dateQuery, metric, page, size, sort);
     }
 }

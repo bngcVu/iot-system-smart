@@ -18,8 +18,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
-import com.iot_system.util.ValueRange;
-import com.iot_system.util.ValueFilterParser;
 import jakarta.persistence.criteria.Predicate;
 
 @Service
@@ -33,9 +31,9 @@ public class SensorDataService {
         this.sensorRepo = sensorRepo;
     }
 
-    /**
-     * Lưu dữ liệu cảm biến vào DB
-     */
+    
+    //Lưu một bản ghi dữ liệu cảm biến vào csdl (ghi thời điểm hiện tại)
+    
     public SensorData saveSensorData(Device device, Double temperature, Double humidity, Double light) {
         SensorData data = new SensorData();
         data.setDevice(device);
@@ -47,8 +45,14 @@ public class SensorDataService {
     }
 
     /**
-     * Tìm kiếm dữ liệu cảm biến theo ngày/giờ với nhiều định dạng, có phân trang
-     * Hỗ trợ: HH:mm:ss dd/MM/yyyy, dd-MM-yyyy HH:mm:ss, dd-MM-yyyy HH:mm, ddMMyyyy, dd/MM/yyyy, ddMMyy
+     * Tìm kiếm theo thời gian (có phân trang) với nhiều định dạng ngày/giờ.
+     * Hỗ trợ các định dạng: 
+     *          HH:mm:ss dd/MM/yyyy, 
+     *          dd-MM-yyyy HH:mm:ss, 
+     *          dd-MM-yyyy HH:mm, 
+     *          ddMMyyyy, 
+     *          dd/MM/yyyy, 
+     *          ddMMyy
      */
     public PagedResponse<SensorReadingDTO> search(String dateStr, SensorMetric metric, int page, int size, String sort) {
         LocalDateTime start = null;
@@ -56,17 +60,17 @@ public class SensorDataService {
         String searchMessage = "";
 
         if (dateStr != null && !dateStr.isBlank()) {
-            // Thử parse theo các định dạng khác nhau
+            // Parse theo các định dạng hỗ trợ; trả về start/end tương ứng
             DateTimeUtils.DateTimeParseResult parseResult = DateTimeUtils.parseDateTime(dateStr);
             
             if (parseResult != null) {
                 if (parseResult.isExactMatch()) {
-                    // Tìm kiếm chính xác theo giây
+                    // Trùng chính xác tới giây
                     start = parseResult.getStart();
                     end = parseResult.getEnd();
                     searchMessage = "Tìm thấy kết quả chính xác cho " + dateStr;
                 } else {
-                    // Tìm kiếm theo phút (trong khoảng 1 phút)
+                    // Trùng theo phút (khoảng 1 phút)
                     start = parseResult.getStart();
                     end = parseResult.getEnd();
                     searchMessage = "Tìm thấy kết quả trong phút " + dateStr;
@@ -76,7 +80,7 @@ public class SensorDataService {
             }
         }
 
-        // Dùng JPQL search(...) + Sort từ Pageable
+    // Gọi repository JPQL search(...) + sắp xếp theo Pageable
         Page<SensorData> sensorPage = sensorRepo.search(start, end, metric != null ? metric.name() : "ALL", PageRequest.of(page, size,
                 ("asc".equalsIgnoreCase(sort))
                         ? Sort.by("recordedAt").ascending()
@@ -99,8 +103,6 @@ public class SensorDataService {
                                                          SensorMetric metric,
                                                          String valueOp,
                                                          Double value,
-                                                         Double valueTo,
-                                                         Double tolerance,
                                                          int page,
                                                          int size,
                                                          String sort) {
@@ -115,12 +117,70 @@ public class SensorDataService {
             end = parseResult.getEnd();
         }
 
-        ValueRange range = ValueFilterParser.toRange(valueOp, value, valueTo, tolerance, metric);
+    // Trường hợp đặc biệt: metric = ALL => khớp giá trị ở bất kỳ cột nào (OR)
+        if (metric == SensorMetric.ALL) {
+            if (value == null) {
+                throw new IllegalArgumentException("Cần truyền 'value' khi tìm kiếm ở chế độ ALL");
+            }
+            if (valueOp != null && !valueOp.equalsIgnoreCase("eq")) {
+                throw new IllegalArgumentException("Chế độ ALL chỉ hỗ trợ so sánh tuyệt đối (eq)");
+            }
+
+            final LocalDateTime startTime2 = start;
+            final LocalDateTime endTime2 = end;
+            final Double v = value;
+            // Dùng tolerance nhỏ để tránh sai số số thực khi so sánh bằng tuyệt đối (DOUBLE)
+            final double tol = 0.05d;
+
+            Specification<SensorData> specAll = (root, query, cb) -> {
+                var predicate = cb.conjunction();
+                if (startTime2 != null) {
+                    predicate = cb.and(predicate, cb.greaterThanOrEqualTo(root.get("recordedAt"), startTime2));
+                }
+                if (endTime2 != null) {
+                    predicate = cb.and(predicate, cb.lessThan(root.get("recordedAt"), endTime2));
+                }
+                // OR: bất kỳ cột nào (temperature/humidity/light) xấp xỉ bằng giá trị (±tol)
+                var orPredicate = cb.or(
+                        cb.between(root.get("temperature"), v - tol, v + tol),
+                        cb.between(root.get("humidity"), v - tol, v + tol),
+                        cb.between(root.get("light"), v - tol, v + tol)
+                );
+                return cb.and(predicate, orPredicate);
+            };
+
+            Page<SensorData> sensorPage = sensorRepo.findAll(specAll, PageRequest.of(page, size,
+                    ("asc".equalsIgnoreCase(sort))
+                            ? Sort.by("recordedAt").ascending()
+                            : Sort.by("recordedAt").descending()
+            ));
+
+            int startIndex = page * size;
+            return ResponseUtils.mapToPagedResponse(sensorPage, page, size,
+                    "Tìm theo giá trị (ALL) thành công",
+                    data -> {
+                        int index = sensorPage.getContent().indexOf(data);
+                        return SensorReadingDTO.from(data, startIndex + index + 1);
+                    },
+                    "Không tìm thấy dữ liệu cảm biến.");
+        }
+
+        // Các trường hợp còn lại: lọc theo một cảm biến cụ thể với toán tử 'eq'
+        if (valueOp == null || valueOp.isBlank()) {
+            valueOp = "eq";
+        }
+        if (!"eq".equalsIgnoreCase(valueOp)) {
+            throw new IllegalArgumentException("Chỉ hỗ trợ so sánh giá trị tuyệt đối (eq)");
+        }
+        if (value == null) {
+            throw new IllegalArgumentException("Cần cung cấp giá trị để so sánh");
+        }
 
         final LocalDateTime startTime = start;
         final LocalDateTime endTime = end;
         final SensorMetric metricFinal = metric;
-        final ValueRange valueRange = range;
+        final Double v = value;
+        final double tol = 0.05d; // đồng bộ với nhánh ALL để tránh sai số số thực
 
         Specification<SensorData> spec = (root, query, cb) -> {
             Predicate predicate = cb.conjunction();
@@ -132,26 +192,8 @@ public class SensorDataService {
             }
             if (metricFinal != null && metricFinal != SensorMetric.ALL) {
                 String field = resolveField(metricFinal);
-                if (valueRange != null) {
-                    Double from = valueRange.getFrom();
-                    Double to = valueRange.getTo();
-                    if (from != null && !from.isInfinite()) {
-                        if (valueRange.isIncludeFrom()) {
-                            predicate = cb.and(predicate, cb.greaterThanOrEqualTo(root.get(field), from));
-                        } else {
-                            predicate = cb.and(predicate, cb.greaterThan(root.get(field), from));
-                        }
-                    }
-                    if (to != null && !to.isInfinite()) {
-                        if (valueRange.isIncludeTo()) {
-                            predicate = cb.and(predicate, cb.lessThanOrEqualTo(root.get(field), to));
-                        } else {
-                            predicate = cb.and(predicate, cb.lessThan(root.get(field), to));
-                        }
-                    }
-                } else {
-                    predicate = cb.and(predicate, cb.isNotNull(root.get(field)));
-                }
+                // So sánh xấp xỉ bằng (±tol) để ổn định trước sai số Double
+                predicate = cb.and(predicate, cb.between(root.get(field), v - tol, v + tol));
             }
             return predicate;
         };
@@ -183,7 +225,7 @@ public class SensorDataService {
 
 
 
-    // Lấy tất cả dữ liệu cảm biến, có phân trang
+    // Lấy toàn bộ dữ liệu cảm biến (có phân trang), có thể lọc theo metric != ALL
     public PagedResponse<SensorReadingDTO> getAllData(SensorMetric metric, int page, int size, String sort) {
         log.info("Getting all sensor data - page: {}, size: {}, sort: {}", page, size, sort);
         

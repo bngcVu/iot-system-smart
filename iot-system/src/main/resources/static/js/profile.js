@@ -1,4 +1,5 @@
 window.addEventListener('DOMContentLoaded',()=>{
+
   document.querySelectorAll('.thread-opener').forEach(input=>{
     input.addEventListener('click', ()=>{
       const url = input.value?.trim();
@@ -23,7 +24,9 @@ window.addEventListener('DOMContentLoaded',()=>{
     });
   });
 
-  document.getElementById('generatePdfBtn').addEventListener('click', () => {
+  const genBtn = document.getElementById('generatePdfBtn');
+  if (genBtn) {
+    genBtn.addEventListener('click', () => {
     const btn = document.getElementById('generatePdfBtn');
     const originalText = btn.innerHTML;
     
@@ -104,9 +107,9 @@ window.addEventListener('DOMContentLoaded',()=>{
         btn.disabled = false;
       }, 2000);
     }
-  });
+    });
+  }
 
-  
 });
 
 

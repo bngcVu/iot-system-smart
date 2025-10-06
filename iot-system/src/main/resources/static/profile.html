@@ -42,7 +42,7 @@
     <section class="profile-hero"></section>
 
     <!-- Profile header giống bố cục GitHub: avatar lớn + tên + email -->
-    <section class="card profile-card">
+  <section class="card profile-card">
       <div class="profile-header large">
         <img src="img/vu.jpg" alt="avatar" class="avatar-hero"/>
         <div class="identity">
@@ -50,6 +50,10 @@
           <div class="email">buingocvuuu@gmail.com</div>
         </div>
       </div>
+
+      <hr style="margin:2rem 0; border:none; border-top:1px solid #e5e7eb"/>
+
+      
 
       <div class="form-grid">
         <div class="field">
@@ -108,9 +112,9 @@
           <div class="input-row" style="gap:0.5rem; align-items:center;">
             <div style="position:relative;flex:1;">
               <i class="fa-solid fa-book" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#6b7280;"></i>
-              <input id="apiDocsLink" class="thread-opener" type="text" value="/swagger-ui.html" readonly style="padding-left:34px; cursor:pointer;"/>
+              <input id="apiDocsLink" class="thread-opener" type="text" value="http://localhost:8081/swagger-ui/index.html" readonly style="padding-left:34px; cursor:pointer;"/>
             </div>
-            <button class="btn btn-secondary thread-open-btn" data-target="apiDocsLink" title="Mở thread"><i class="fa-solid fa-up-right-from-square"></i></button>
+            <button class="btn btn-secondary thread-open-btn" data-target="apiDocsLink" title="Mở Swagger UI"><i class="fa-solid fa-up-right-from-square"></i></button>
           </div>
         </div>
 
@@ -119,7 +123,7 @@
           <div class="input-row" style="gap:0.5rem; align-items:center;">
             <div style="position:relative;flex:1;">
               <i class="fa-solid fa-file-pdf" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#6b7280;"></i>
-              <input id="pdfReportLink" class="thread-opener" type="text" value="BUINGOCVU_B22DCCN910.pdf" readonly style="padding-left:34px; cursor:pointer;"/>
+              <input id="pdfReportLink" class="thread-opener" type="text" value="BAOCAO.pdf" readonly style="padding-left:34px; cursor:pointer;"/>
             </div>
             <button class="btn btn-secondary thread-open-btn" data-target="pdfReportLink" title="Mở PDF"><i class="fa-solid fa-up-right-from-square"></i></button>
           </div>
