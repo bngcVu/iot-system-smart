@@ -44,26 +44,3 @@ device_actions_ack: ESP32 → Backend (phản hồi lệnh)
 Spring Boot 3.5.5 (Java 21), Maven Wrapper
 🧠 Kiến thức/Thiết kế áp dụng trong Backend
 Phân lớp rõ ràng: Controller → Service → Repository → Entity/DTO
-�️ Cấu trúc hệ thống
-iot-system/
-├── src/main/java/com/iot_system/
-│   ├── config/      # Cấu hình (CORS, MQTT, WebSocket)
-│   ├── controller/  # REST Controllers
-│   ├── domain/      # dto/, entity/, enums/
-│   ├── mqtt/        # MQTT Publisher/Subscriber
-│   ├── repository/  # JPA Repositories
-│   ├── service/     # Business Logic
-│   └── util/        # Tiện ích
-├── src/main/resources/
-│   ├── static/      # HTML/CSS/JS giao diện
-│   │   ├── css/
-│   │   ├── js/
-│   │   ├── img/
-│   │   └── *.html
-│   └── application.properties
-├── scripts/
-│   └── run-utf8.ps1 # Chạy app với UTF‑8 console (Windows)
-├── logs/            # app.log (tạo khi chạy)
-├── target/          # build output
-├── pom.xml
-└── ENV_SETUP.md
